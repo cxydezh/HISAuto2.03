@@ -347,6 +347,7 @@ class MainWindow:
         button_frame.grid(row=2, column=0, sticky=tk.EW, padx=5, pady=5)
         
         ttk.Button(button_frame, text="创建", command=self._create_action).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="录制", command=self._record_action).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="修改", command=self._modify_action).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="删除", command=self._delete_action).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="保存", command=self._save_action).pack(side=tk.LEFT, padx=5)
@@ -972,7 +973,13 @@ class MainWindow:
         session.commit()
         session.close()
         self._refresh_action_group()
-        
+    def _record_action(self):
+        """录制行为元"""
+        # TODO: 实现录制行为元的功能
+        from gui.Recordaction import RecordWindow
+        self.hide()
+        record_window = RecordWindow(self)
+        record_window.show()
     def _modify_action(self):
         """修改行为元"""
         from config.config_manager import ConfigManager
