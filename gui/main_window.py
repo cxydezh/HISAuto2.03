@@ -464,6 +464,10 @@ class MainWindow:
         list_debug_frame.grid_rowconfigure(0, weight=1)
         list_debug_frame.grid_columnconfigure(0, weight=1)
        
+       #数据更新
+        self._refresh_action_group()
+        self._refresh_debug_action_group()
+
     def _on_action_type_changed(self, event=None):
         """当行为类型改变时触发
         
