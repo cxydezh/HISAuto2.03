@@ -9,7 +9,7 @@ from database import db_manager
 from models.department import Department
 from models.task import TaskList, TaskListFinished
 from models.user import User
-from models.actions import ActionGroup
+from models.actions import ActionGroup, ActionsGroupHierarchy
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -50,6 +50,39 @@ class MainWindow:
         # 确认按钮
         confirm_btn = ttk.Button(time_picker, text="确定", command=confirm_time)
         confirm_btn.grid(row=2, column=0, columnspan=2, pady=10)
+    def show_mode_picker(self,root):
+        def confirm_module():
+            self.module_select_node=local_mode_var.get()
+        select_mode =tk.Toplevel(root)
+        select_mode.title="选择模式"
+        select_mode.geometry(300*500)
+        select_mode.grab_set()
+        select_mode.focus_set()
+
+        local_mode_frame = ttk.Frame(select_mode)
+        local_mode_frame.pack(side=tk.LEFT,fill="x")
+        local_mode_var =ttk.IntVar()
+        
+        label_local =ttk.Label(local_mode_frame,text='选择位置')
+        label_local.pack(side="left",padx=5,pady=5)
+        selected = self.action_tree.selection()
+        if not selected:
+            messagebox.showwarning("警告", "请选择节点")
+            local_mode_var=5
+            return
+        elif selected[0].startswith("group_"):
+            upper_node =ttk.Radiobutton(local_mode_frame,text="上方插入",variable=local_mode_var,value=1).pack(side=tk.LEFT,fill='y')
+            lower_node =ttk.Radiobutton(local_mode_frame,text='下方插入',variable=local_mode_var,value=2).pack(side=tk.LEFT,fill='y',padx=5,pady=5)
+        elif selected[0].startswith("A"):
+            upper_node =ttk.Radiobutton(local_mode_frame,text="上方插入",variable=local_mode_var,value=1).pack(side=tk.LEFT,fill='y')
+            lower_node =ttk.Radiobutton(local_mode_frame,text='下方插入',variable=local_mode_var,value=2).pack(side=tk.LEFT,fill='y',padx=5,pady=5)
+            child_node = ttk.Radiobutton(local_mode_frame,text ='插入子项',variable=local_mode_var,value=3).pack(side=tk.LEFT,fill='y',padx=5,pady=5)
+        else:
+            messagebox.showwarning("警告", "节点的内容出现错误，请修复")
+            local_mode_var=5
+            return
+        confirm_btn = ttk.Button(select_mode, text="确定", command=confirm_module)
+        confirm_btn.grid(row=2, column=0, columnspan=2, pady=10)
     def __init__(self, username: str, is_super_admin: bool = False,engine=None):
         """
         初始化主窗口
@@ -65,7 +98,11 @@ class MainWindow:
         self.session = None
         # 设置窗口图标
         # self.window.iconbitmap("path/to/icon.ico")  # TODO: 添加图标
-        
+        # 设置tree控件的选中的节点内容
+        self.module_select_node =None
+        self.actiongroup_hierarchy_tree_iid =None
+        self.action_list_tree_iid =None
+        self.action_debug_list_tree_iid=None
         self.username = username
         self.is_super_admin = is_super_admin
         
@@ -111,8 +148,8 @@ class MainWindow:
         # Excel路径
         ttk.Label(excel_frame, text="Excel路径:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.excel_path_var = tk.StringVar()
-        ttk.Entry(excel_frame, textvariable=self.excel_path_var, width=50).grid(row=0, column=1, columnspan=2, sticky=tk.EW, padx=5, pady=5)
-        ttk.Button(excel_frame, text="添加", command=self._add_excel_file).grid(row=0, column=3, padx=5, pady=5)
+        ttk.Entry(excel_frame, textvariable=self.excel_path_var, width=50,state='').grid(row=0, column=1, columnspan=2, sticky=tk.EW, padx=5, pady=5)
+        ttk.Button(excel_frame, text="添加", command=self._add_excel_file,state ="disable").grid(row=0, column=3, padx=5, pady=5)
         
         # Sheet编号和监测字段
         ttk.Label(excel_frame, text="Sheet编号:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
@@ -128,8 +165,10 @@ class MainWindow:
         # 导入和保存按钮
         button_frame = ttk.Frame(excel_frame)
         button_frame.grid(row=2, column=0, columnspan=4, pady=5)
-        ttk.Button(button_frame, text="导入", command=self._import_excel).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="保存", command=self._save_excel_settings).pack(side=tk.LEFT, padx=5)
+        self.btn_import_excel=ttk.Button(button_frame, text="导入", command=self._import_excel,state="disabled")
+        self.btn_import_excel.pack(side=tk.LEFT, padx=5)
+        self.btn_save_excel_setting=ttk.Button(button_frame, text="保存", command=self._save_excel_settings,state="disabled")
+        self.btn_save_excel_setting.pack(side=tk.LEFT, padx=5)
         
         # 配置grid权重
         excel_frame.grid_columnconfigure(1, weight=1)
@@ -145,12 +184,29 @@ class MainWindow:
         # 行为组名称
         ttk.Label(basic_info_frame, text="名称:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_name_var = tk.StringVar()
-        ttk.Entry(basic_info_frame, textvariable=self.group_name_var, width=20).pack(side=tk.LEFT, padx=(0, 20))
+        self.group_name_var.set('ceshi1')
+        self.group_name_entry = ttk.Entry(basic_info_frame, textvariable=self.group_name_var, width=20, state="normal")
+        self.group_name_var.set('ceshi2')
+        # 添加诊断信息
+        print("诊断信息:")
+        print(f"1. StringVar 值: {self.group_name_var.get()}")
+        print(f"2. Entry 控件值: {self.group_name_entry.get()}")
+        print(f"3. Entry 状态: {self.group_name_entry.cget('state')}")
+        print(f"4. StringVar ID: {id(self.group_name_var)}")
+        print(f"5. Entry 的 textvariable ID: {id(self.group_name_entry.cget('textvariable'))}")
+
+        # 强制刷新
+        self.window.update()
+        self.window.update_idletasks()
+
+        print("刷新后 Entry 值:", self.group_name_entry.get())
+        self.group_name_entry.pack(side=tk.LEFT, padx=(0, 20))
         
         # 上一次循环位置
         ttk.Label(basic_info_frame, text="上一次循环位置:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_last_circle_local_var = tk.StringVar()
-        ttk.Entry(basic_info_frame, textvariable=self.group_last_circle_local_var, width=20).pack(side=tk.LEFT)
+        self.group_last_circle_local_entry = ttk.Entry(basic_info_frame, textvariable=self.group_last_circle_local_var, width=20, state="disabled")
+        self.group_last_circle_local_entry.pack(side=tk.LEFT)
 
         # 创建时间信息区域（第二行）
         time_info_frame = ttk.Frame(action_group_frame)
@@ -159,12 +215,14 @@ class MainWindow:
         # 上一次循环节点
         ttk.Label(time_info_frame, text="上一次循环节点:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_last_circle_node_var = tk.StringVar()
-        ttk.Entry(time_info_frame, textvariable=self.group_last_circle_node_var, width=20).pack(side=tk.LEFT, padx=(0, 20))
+        self.group_last_circle_node_entry = ttk.Entry(time_info_frame, textvariable=self.group_last_circle_node_var, width=20, state="disabled")
+        self.group_last_circle_node_entry.pack(side=tk.LEFT, padx=(0, 20))
         
         # 创建时间
         ttk.Label(time_info_frame, text="创建时间:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_setup_time_var = tk.StringVar()
-        ttk.Entry(time_info_frame, textvariable=self.group_setup_time_var, width=20)
+        self.group_setup_time_entry = ttk.Entry(time_info_frame, textvariable=self.group_setup_time_var, width=20, state="disabled")
+        self.group_setup_time_entry.pack(side=tk.LEFT, padx=(0, 20))
 
         # 创建用户信息区域（第三行）
         user_info_frame = ttk.Frame(action_group_frame)
@@ -173,12 +231,14 @@ class MainWindow:
         # 更新时间
         ttk.Label(user_info_frame, text="更新时间:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_update_time_var = tk.StringVar()
-        ttk.Entry(user_info_frame, textvariable=self.group_update_time_var, width=20).pack(side=tk.LEFT, padx=(0, 20))
+        self.group_update_time_entry = ttk.Entry(user_info_frame, textvariable=self.group_update_time_var, width=20, state="disabled")
+        self.group_update_time_entry.pack(side=tk.LEFT, padx=(0, 20))
         
         # 创建者ID
         ttk.Label(user_info_frame, text="创建者ID:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_user_id_var = tk.StringVar()
-        ttk.Entry(user_info_frame, textvariable=self.group_user_id_var, width=20).pack(side=tk.LEFT)
+        self.group_user_id_entry = ttk.Entry(user_info_frame, textvariable=self.group_user_id_var, width=20, state="disabled")
+        self.group_user_id_entry.pack(side=tk.LEFT)
 
         # 创建部门信息区域（第四行）
         dept_info_frame = ttk.Frame(action_group_frame)
@@ -187,12 +247,14 @@ class MainWindow:
         # 创建者姓名
         ttk.Label(dept_info_frame, text="创建者姓名:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_user_name_var = tk.StringVar()
-        ttk.Entry(dept_info_frame, textvariable=self.group_user_name_var, width=20).pack(side=tk.LEFT, padx=(0, 20))
+        self.group_user_name_entry = ttk.Entry(dept_info_frame, textvariable=self.group_user_name_var, width=20, state="disabled")
+        self.group_user_name_entry.pack(side=tk.LEFT, padx=(0, 20))
         
         # 科室ID
         ttk.Label(dept_info_frame, text="科室:").pack(side=tk.LEFT, padx=(0, 5))
         self.department_id_var = tk.StringVar()
-        ttk.Entry(dept_info_frame, textvariable=self.department_id_var, width=10).pack(side=tk.LEFT)
+        self.department_id_entry = ttk.Entry(dept_info_frame, textvariable=self.department_id_var, width=10, state="disabled")
+        self.department_id_entry.pack(side=tk.LEFT)
 
         # 创建自动执行区域（第五行）
         auto_exec_frame = ttk.Frame(action_group_frame)
@@ -200,14 +262,15 @@ class MainWindow:
         
         # 是否自动执行
         self.is_auto_var = tk.BooleanVar()
-        ttk.Checkbutton(auto_exec_frame, text="自动执行", variable=self.is_auto_var).pack(side=tk.LEFT, padx=(0, 20))
+        self.is_auto_check = ttk.Checkbutton(auto_exec_frame, text="自动执行", variable=self.is_auto_var, state="disabled")
+        self.is_auto_check.pack(side=tk.LEFT, padx=(0, 20))
         
         # 自动执行时间
         ttk.Label(auto_exec_frame, text="自动执行时间:").pack(side=tk.LEFT, padx=(0, 5))
         self.auto_time_var = tk.StringVar()
-        et_auto_time=ttk.Entry(auto_exec_frame, textvariable=self.auto_time_var, width=20)
-        et_auto_time.pack(side=tk.LEFT)
-        et_auto_time.bind("<Button-1>", lambda e: self.show_time_picker(self.window, et_auto_time))
+        self.auto_time_entry = ttk.Entry(auto_exec_frame, textvariable=self.auto_time_var, width=20, state="disabled")
+        self.auto_time_entry.pack(side=tk.LEFT)
+        self.auto_time_entry.bind("<Button-1>", lambda e: self.show_time_picker(self.window, self.auto_time_entry))
 
         # 创建描述区域（第六行）
         desc_frame = ttk.Frame(action_group_frame)
@@ -216,7 +279,8 @@ class MainWindow:
         # 行为组备注
         ttk.Label(desc_frame, text="描述:").pack(side=tk.LEFT, padx=(0, 5))
         self.group_desc_var = tk.StringVar()
-        ttk.Entry(desc_frame, textvariable=self.group_desc_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.group_desc_entry = ttk.Entry(desc_frame, textvariable=self.group_desc_var, width=50, state="disabled")
+        self.group_desc_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # 配置grid权重
         action_group_frame.grid_columnconfigure(0, weight=1)
@@ -227,7 +291,7 @@ class MainWindow:
         tree_frame.grid(row=2, column=0, sticky=tk.NSEW, padx=5, pady=5)
         
         # 创建树形视图和滚动条
-        self.action_tree = ttk.Treeview(tree_frame, columns=("name","userid",), show="tree headings")
+        self.action_tree = ttk.Treeview(tree_frame,name='actiongroup_hierarchy_tree', columns=("name","userid",),selectmode='browse',show="tree headings")
         self.action_tree.heading("#0", text="结构")
         self.action_tree.column("#0", width=60)
         self.action_tree.heading("name", text="名称")
@@ -238,7 +302,7 @@ class MainWindow:
         # 添加滚动条
         tree_scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.action_tree.yview)
         self.action_tree.configure(yscrollcommand=tree_scroll.set)
-        
+        self.action_tree.bind('<<TreeviewSelect>>',self._on_action_tree_select)
         # 布局
         self.action_tree.grid(row=0, column=0, sticky=tk.NSEW)
         tree_scroll.grid(row=0, column=1, sticky=tk.NS)
@@ -247,11 +311,16 @@ class MainWindow:
         button_frame = ttk.Frame(left_panel)
         button_frame.grid(row=3, column=0, sticky=tk.EW, padx=5, pady=5)
         
-        ttk.Button(button_frame, text="新建", command=self._new_action_group).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="编辑", command=self._edit_action_group).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="图像采集", command=self._capture_image).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="刷新", command=self._refresh_action_group).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="删除", command=self._delete_action_group).pack(side=tk.LEFT, padx=5)
+        self.btn_new_action_group=ttk.Button(button_frame, text="新建", command=self._new_action_group, state="disabled")
+        self.btn_new_action_group.pack(side=tk.LEFT, padx=5)
+        self.btn_edit_action_group=ttk.Button(button_frame, text="编辑", command=self._edit_action_group,state="disabled")
+        self.btn_edit_action_group.pack(side=tk.LEFT, padx=5)
+        self.btn_capture_image=ttk.Button(button_frame, text="图像采集", command=self._capture_image,state="disabled")
+        self.btn_capture_image.pack(side=tk.LEFT, padx=5)
+        self.btn_refresh_action_group=ttk.Button(button_frame, text="刷新", command=self._refresh_action_group,state="disabled")
+        self.btn_refresh_action_group.pack(side=tk.LEFT, padx=5)
+        self.btn_delete_action_group=ttk.Button(button_frame, text="删除", command=self._delete_action_group,state="disabled")
+        self.btn_delete_action_group.pack(side=tk.LEFT, padx=5)
         
         # 配置grid权重，使树形视图可以随窗口调整大小
         left_panel.grid_rowconfigure(1, weight=1)
@@ -276,12 +345,14 @@ class MainWindow:
         # 创建行为名称控件
         ttk.Label(content_frame, text="行为名称:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_name_var = tk.StringVar()
-        ttk.Entry(content_frame, textvariable=self.action_name_var).grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        self.action_name_entry= ttk.Entry(content_frame, textvariable=self.action_name_var,state="disabled")
+        self.action_name_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
 
         # 创建下一步行为控件
         ttk.Label(content_frame, text="下一步行为:").grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
         self.next_action_var = tk.StringVar()
-        ttk.Entry(content_frame, textvariable=self.next_action_var).grid(row=0, column=3, sticky=tk.EW, padx=5, pady=5)
+        self.next_action_entry = ttk.Entry(content_frame, textvariable=self.next_action_var,state="disabled")
+        self.next_action_entry.grid(row=0, column=3, sticky=tk.EW, padx=5, pady=5)
         # 行为类型
         ttk.Label(content_frame, text="行为类型:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_type_var = tk.StringVar()
@@ -297,12 +368,14 @@ class MainWindow:
         # Debug_group_id
         ttk.Label(content_frame, text="调试组ID:").grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
         self.debug_group_id = tk.StringVar()
-        ttk.Entry(content_frame, textvariable=self.debug_group_id).grid(row=1, column=3, sticky=tk.EW, padx=5, pady=5)
+        self.debug_group_id_entry=ttk.Entry(content_frame, textvariable=self.debug_group_id)
+        self.debug_group_id_entry.grid(row=1, column=3, sticky=tk.EW, padx=5, pady=5)
 
         # 行为备注
         ttk.Label(content_frame, text="行为备注:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_note_var = tk.StringVar()
-        ttk.Entry(content_frame, textvariable=self.action_note_var).grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
+        self.action_note_entry=ttk.Entry(content_frame, textvariable=self.action_note_var)
+        self.action_note_entry.grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
 
         # 配置grid权重
         content_frame.grid_columnconfigure(1, weight=1)
@@ -325,7 +398,7 @@ class MainWindow:
         list_frame.grid(row=1, column=0, sticky=tk.NSEW, padx=5, pady=5)
         
         # 创建列表视图和滚动条
-        self.action_list = ttk.Treeview(list_frame, columns=("type", "name", "next"), show="headings")
+        self.action_list = ttk.Treeview(list_frame, name='action_list_tree',columns=("type", "name", "next"), show="headings")
         self.action_list.heading("type", text="类型")
         self.action_list.heading("name", text="名称")
         self.action_list.heading("next", text="下一步")
@@ -346,12 +419,18 @@ class MainWindow:
         button_frame = ttk.Frame(left1_panel)
         button_frame.grid(row=2, column=0, sticky=tk.EW, padx=5, pady=5)
         
-        ttk.Button(button_frame, text="创建", command=self._create_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="录制", command=self._record_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="修改", command=self._modify_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="删除", command=self._delete_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="保存", command=self._save_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="调用套餐", command=self._use_suit).pack(side=tk.LEFT, padx=5)
+        self.btn_new_group=ttk.Button(button_frame, text="创建", command=self._create_action)
+        self.btn_new_group.pack(side=tk.LEFT, padx=5)
+        self.btn_record_action=ttk.Button(button_frame, text="录制", command=self._record_action)
+        self.btn_record_action.pack(side=tk.LEFT, padx=5)
+        self.btn_modify_action=ttk.Button(button_frame, text="修改", command=self._modify_action)
+        self.btn_modify_action.pack(side=tk.LEFT, padx=5)
+        self.btn_delete_action=ttk.Button(button_frame, text="删除", command=self._delete_action)
+        self.btn_delete_action.pack(side=tk.LEFT, padx=5)
+        self.btn_save_action=ttk.Button(button_frame, text="保存", command=self._save_action)
+        self.btn_save_action.pack(side=tk.LEFT, padx=5)
+        self.btn_use_suit=ttk.Button(button_frame, text="调用套餐", command=self._use_suit)
+        self.btn_use_suit.pack(side=tk.LEFT, padx=5)
         
         # 配置grid权重，使左侧1面板可以随窗口调整大小
         home_frame.grid_columnconfigure(0, weight=1)
@@ -450,14 +529,19 @@ class MainWindow:
         list_debug_scroll.grid(row=0, column=1, sticky=tk.NS)
         
         # 创建行为列表按钮
-        button_debug_frame = ttk.Frame(left2_panel)
-        button_debug_frame.grid(row=2, column=0, sticky=tk.EW, padx=5, pady=5)
+        button_frame = ttk.Frame(left2_panel)
+        button_frame.grid(row=2, column=0, sticky=tk.EW, padx=5, pady=5)
         
-        ttk.Button(button_debug_frame, text="创建", command=self._create_debug_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_debug_frame, text="修改", command=self._modify_debug_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_debug_frame, text="删除", command=self._delete_debug_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_debug_frame, text="保存", command=self._save_debug_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_debug_frame, text="调用套餐", command=self._use_debug_suit).pack(side=tk.LEFT, padx=5)
+        self.btn_create_debug_action=ttk.Button(button_frame, text="创建", command=self._create_debug_action)
+        self.btn_create_debug_action.pack(side=tk.LEFT, padx=5)
+        self.btn_modify_debug_action=ttk.Button(button_frame, text="修改", command=self._modify_debug_action)
+        self.btn_modify_debug_action.pack(side=tk.LEFT, padx=5)
+        self.btn_delete_debug_action=ttk.Button(button_frame, text="删除", command=self._delete_debug_action)
+        self.btn_delete_debug_action.pack(side=tk.LEFT, padx=5)
+        self.btn_save_debug_action=ttk.Button(button_frame, text="保存", command=self._save_debug_action)
+        self.btn_save_debug_action.pack(side=tk.LEFT, padx=5)
+        self.btn_use_debug_suit=ttk.Button(button_frame, text="调用套餐", command=self._use_debug_suit)
+        self.btn_use_debug_suit.pack(side=tk.LEFT, padx=5)
         
         # 配置grid权重，使左侧1面板可以随窗口调整大小
         left2_panel.grid_rowconfigure(0, weight=1)
@@ -468,6 +552,17 @@ class MainWindow:
        #数据更新
         self._refresh_action_group()
         self._refresh_debug_action_group()
+
+    def action_group_item_selected(self, event=None):
+        """当行为组树形视图项被选中时触发"
+        """
+        selected = self.action_tree.selection()
+        if selected:
+            item = self.action_tree.item(selected[0])
+            self.actiongroup_hierarchy_tree_iid = selected[0]
+            self._update_action_group_details(item['values'])
+            self._refresh_action_list()
+            self._refresh_debug_action_list()
 
     def _on_action_type_changed(self, event=None):
         """当行为类型改变时触发
@@ -726,23 +821,206 @@ class MainWindow:
         config.set_value('System', 'Column', self.column_var.get())
         from tkinter import messagebox
         messagebox.showinfo("提示", "Excel设置已保存")
+    def _on_action_tree_select(self, event=None):
+        selected = self.action_tree.selection()
+        if not selected:
+            return
+        iid = selected[0]
+
+        # 1. 先全部禁用
+        self._set_controls_state(
+            [
+                self.group_name_entry, self.group_last_circle_local_entry, self.group_last_circle_node_entry,
+                self.group_setup_time_entry, self.group_update_time_entry, self.group_user_id_entry,
+                self.is_auto_check, self.auto_time_entry, self.group_desc_entry,
+                self.btn_new_group, self.btn_edit_group, self.btn_capture_image, self.btn_refresh_group, self.btn_delete_group
+            ],
+            'disabled'
+        )
+        self._set_controls_state(
+            [
+                self.action_name_entry, self.next_action_entry, self.action_type_combo,
+                self.debug_group_id_entry, self.action_note_entry,
+                self.btn_create_action, self.btn_record_action, self.btn_modify_action,
+                self.btn_delete_action, self.btn_save_action, self.btn_use_suit,
+                self.action_list
+            ],
+            'disabled'
+        )
+
+        # 2. 判断节点类型
+        if iid.startswith("group_"):
+            # 选中的是ActionGroup
+            group_id = int(iid.split("_")[1])
+            # Left_panel和Left1_panel全部可用
+            self._set_controls_state(
+                [
+                    self.group_name_entry, self.group_last_circle_local_entry, self.group_last_circle_node_entry,
+                    self.group_setup_time_entry, self.group_update_time_entry, self.group_user_id_entry,
+                    self.is_auto_check, self.auto_time_entry, self.group_desc_entry,
+                    self.btn_new_group, self.btn_edit_group, self.btn_capture_image, self.btn_refresh_group, self.btn_delete_group
+                ],
+                'normal'
+            )
+            self.group_user_name_entry.config(state='disabled')
+            self.department_id_entry.config(state='disabled')
+            self._set_controls_state(
+                [
+                    self.action_name_entry, self.next_action_entry, self.action_type_combo,
+                    self.debug_group_id_entry, self.action_note_entry,
+                    self.btn_create_action, self.btn_record_action, self.btn_modify_action,
+                    self.btn_delete_action, self.btn_save_action, self.btn_use_suit,
+                    self.action_list
+                ],
+                'normal'
+            )
+            # 填充Left_panel和Left1_panel内容
+            from sqlalchemy.orm import sessionmaker
+            from sqlalchemy import create_engine
+            from config.config_manager import ConfigManager
+            from models.actions import ActionGroup, ActionsGroupHierarchy, ActionList
+            from models.user import User
+            config = ConfigManager()
+            db_url = f"sqlite:///{config.get_value('System', 'DataSource')}"
+            engine = create_engine(db_url)
+            Session = sessionmaker(bind=engine)
+            session = Session()
+            group = session.query(ActionGroup).filter_by(id=group_id).first()
+            if group:
+                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                # Left_panel
+                print("set StringVar", id(self.group_name_var))
+                self.group_name_var.set(group.action_list_group_name)
+                print("set StringVar", id(self.group_name_var))
+                self.group_last_circle_local_var.set(group.last_circle_local or "")
+                self.group_last_circle_node_var.set(group.last_circle_node or "")
+                self.group_setup_time_var.set(str(group.setup_time or ""))
+                self.group_update_time_var.set(str(group.update_time or ""))
+                self.group_user_id_var.set(str(group.user_id or ""))
+                user = session.query(User).filter_by(user_id=group.user_id).first()
+                self.group_user_name_var.set(user.username if user else "")
+                self.department_id_var.set(str(group.department_id or ""))
+                self.is_auto_var.set(bool(group.is_auto or False))
+                self.auto_time_var.set(str(group.auto_time or ""))
+                self.group_desc_var.set(group.action_list_group_note or "")
+                # Left1_panel
+                self.action_list.delete(*self.action_list.get_children())
+                actions = session.query(ActionList).filter_by(group_id=group_id).all()
+                for action in actions:
+                    self.action_list.insert("", "end", iid=str(action.id), values=(
+                        action.action_type, action.action_name, action.next_id
+                    ))
+            session.close()
+        else:
+            # 选中的是ActionsGroupHierarchy
+            # Left_panel可用，Left1_panel全部禁用
+            self._set_controls_state(
+                [
+                    self.group_name_entry, self.group_last_circle_local_entry, self.group_last_circle_node_entry,
+                    self.group_setup_time_entry, self.group_update_time_entry, self.group_user_id_entry,
+                    self.is_auto_check, self.auto_time_entry, self.group_desc_entry,
+                    self.btn_new_group, self.btn_edit_group, self.btn_capture_image, self.btn_refresh_group, self.btn_delete_group
+                ],
+                'normal'
+            )
+            self.group_user_name_entry.config(state='disabled')
+            self.department_id_entry.config(state='disabled')
+            self._set_controls_state(
+                [
+                    self.action_name_entry, self.next_action_entry, self.action_type_combo,
+                    self.debug_group_id_entry, self.action_note_entry,
+                    self.btn_create_action, self.btn_record_action, self.btn_modify_action,
+                    self.btn_delete_action, self.btn_save_action, self.btn_use_suit,
+                    self.action_list
+                ],
+                'disabled'
+            )
+            # 填充Left_panel内容
+            from sqlalchemy.orm import sessionmaker
+            from sqlalchemy import create_engine
+            from config.config_manager import ConfigManager
+            from models.actions import ActionsGroupHierarchy
+            config = ConfigManager()
+            db_url = f"sqlite:///{config.get_value('System', 'DataSource')}"
+            engine = create_engine(db_url)
+            Session = sessionmaker(bind=engine)
+            session = Session()
+            hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=int(iid)).first()
+            if hierarchy:
+                print("set StringVar", id(self.group_name_var))
+                self.group_name_var.set(hierarchy.group_name)
+                print("set StringVar", id(self.group_name_var))
+                self.group_last_circle_local_var.set("")
+                self.group_last_circle_node_var.set("")
+                self.group_setup_time_var.set(str(hierarchy.setup_time or ""))
+                self.group_update_time_var.set(str(hierarchy.update_time or ""))
+                self.group_user_id_var.set(str(hierarchy.doctor_id or ""))
+                self.group_user_name_var.set("")  # 可查user表
+                self.department_id_var.set(str(hierarchy.department_id or ""))
+                self.is_auto_var.set(False)
+                self.auto_time_var.set("")
+                self.group_desc_var.set(hierarchy.group_note or "")
+            session.close()
+            # Left1_panel内容清空
+            self.action_list.delete(*self.action_list.get_children())
+            self.action_name_var.set("")
+            self.next_action_var.set("")
+            self.action_type_var.set("")
+            self.debug_group_id.set("")
+            self.action_note_var.set("")
 
     def _new_action_group(self):
         """新建行为组（弹窗输入，保存到数据库）"""
         import tkinter.simpledialog as simpledialog
         from config.config_manager import ConfigManager
         from sqlalchemy.orm import sessionmaker
-        from models.actions import ActionGroup
+        from models.actions import ActionGroup, ActionsGroupHierarchy
         from sqlalchemy import create_engine
+        #获取要新建的组相对于目前选中的项的位置
+        self.show_mode_picker()
+        if self.module_select_node==5:
+            return 
+        #获取新建组的名称
         group_name = simpledialog.askstring("新建行为组", "请输入行为组名称：")
         if not group_name:
             return
+        
         config = ConfigManager()
         db_url = f"sqlite:///{config.get_value('System', 'DataSource')}"
         engine = create_engine(db_url)
         Session = sessionmaker(bind=engine)
         session = Session()
-        new_group = ActionGroup(action_list_group_name=group_name, user_id=self.username)
+        # 这里可以根据当前选中的分层节点，决定group_rank_id
+        if self.actiongroup_hierarchy_tree_iid.startswith('group_'):
+            select_group= session.query(ActionGroup).filter_by(id=self.actiongroup_hierarchy_tree_iid).first()
+            select_group_rank_id = select_group.group_rank_id
+        hierarchy = session.query(ActionsGroupHierarchy).filter_by(group_rank=select_group_rank_id).first()
+        group_rank_id = hierarchy.id if hierarchy else None
+        if globalvariable.USER_IS_SUPER_ADMIN:
+            department_id_var = simpledialog.askstring("入组的科室代码", "请输入科室代码：")
+        else:
+            department_id_var = globalvariable.USER_DEPARTMENT_ID
+                                                       
+
+        new_group = ActionGroup(
+            action_list_group_name=group_name,
+            user_id=self.username,
+            group_rank_id=group_rank_id,
+            setup_time=datetime.now(),
+            update_time=datetime.now(),
+            excel_name=self.excel_path_var.get() if hasattr(self, 'excel_path_var') else "",
+            excel_sheet_num=int(self.sheet_num_var.get()) if hasattr(self, 'sheet_num_var') and self.sheet_num_var.get().isdigit() else 0,
+            excel_column=int(self.column_var.get()) if hasattr(self, 'column_var') and self.column_var.get().isdigit() else 0,
+            last_circle_local=0,
+            last_circle_node=0,
+            action_list_group_note=self.group_desc_var.get() if hasattr(self, 'group_desc_var') else "",
+            is_auto=self.is_auto_var.get() if hasattr(self, 'is_auto_var') else False,
+            auto_time=self.auto_time_var.get() if hasattr(self, 'auto_time_var') else "",
+            department_id= department_id_var,
+            sort_num=0,
+            about_time=""
+            # 其他字段可补充
+        )
         session.add(new_group)
         session.commit()
         session.close()
@@ -781,7 +1059,21 @@ class MainWindow:
     def _capture_image(self):
         """图像采集"""
         # TODO: 实现图像采集的功能
-        pass
+        self.group_name_var.set('ceshi2')
+
+        # 添加诊断信息
+        print("诊断信息:")
+        print(f"1. StringVar 值: {self.group_name_var.get()}")
+        print(f"2. Entry 控件值: {self.group_name_entry.get()}")
+        print(f"3. Entry 状态: {self.group_name_entry.cget('state')}")
+        print(f"4. StringVar ID: {id(self.group_name_var)}")
+        print(f"5. Entry 的 textvariable ID: {id(self.group_name_entry.cget('textvariable'))}")
+
+        # 强制刷新
+        self.window.update()
+        self.window.update_idletasks()
+
+        print("刷新后 Entry 值:", self.group_name_entry.get()) 
     def _get_left_top_coordinates(self):
         """获取左上角坐标"""
         # TODO: 实现获取左上角坐标的功能
@@ -1096,7 +1388,8 @@ class MainWindow:
         # 调试行为组名称
         ttk.Label(basic_info_frame, text="名称:").pack(side=tk.LEFT, padx=(0, 5))
         self.debug_group_name_var = tk.StringVar()
-        ttk.Entry(basic_info_frame, textvariable=self.debug_group_name_var, width=20).pack(side=tk.LEFT, padx=(0, 20))
+        self.debug_group_name_entry=ttk.Entry(basic_info_frame, textvariable=self.debug_group_name_var, width=20)
+        self.debug_group_name_entry.pack(side=tk.LEFT, padx=(0, 20))
         
         # 创建时间信息区域（第二行）
         time_info_frame = ttk.Frame(action_group_frame)
@@ -1105,7 +1398,8 @@ class MainWindow:
         # 创建时间
         ttk.Label(time_info_frame, text="创建时间:").pack(side=tk.LEFT, padx=(0, 5))
         self.debug_group_setup_time_var = tk.StringVar()
-        ttk.Entry(time_info_frame, textvariable=self.debug_group_setup_time_var, width=20).pack(side=tk.LEFT)
+        self.debug_group_setup_time_entry=ttk.Entry(time_info_frame, textvariable=self.debug_group_setup_time_var, width=20)
+        self.debug_group_setup_time_entry.pack(side=tk.LEFT)
 
         # 创建用户信息区域（第三行）
         user_info_frame = ttk.Frame(action_group_frame)
@@ -1114,12 +1408,14 @@ class MainWindow:
         # 更新时间
         ttk.Label(user_info_frame, text="更新时间:").pack(side=tk.LEFT, padx=(0, 5))
         self.debug_group_update_time_var = tk.StringVar()
-        ttk.Entry(user_info_frame, textvariable=self.debug_group_update_time_var, width=20).pack(side=tk.LEFT, padx=(0, 20))
+        self.debug_group_update_time_entry=ttk.Entry(user_info_frame, textvariable=self.debug_group_update_time_var, width=20)
+        self.debug_group_update_time_entry.pack(side=tk.LEFT, padx=(0, 20))
         
         # 创建者ID
         ttk.Label(user_info_frame, text="创建者ID:").pack(side=tk.LEFT, padx=(0, 5))
         self.debug_group_user_id_var = tk.StringVar()
-        ttk.Entry(user_info_frame, textvariable=self.debug_group_user_id_var, width=20).pack(side=tk.LEFT)
+        self.debug_group_user_id_entry=ttk.Entry(user_info_frame, textvariable=self.debug_group_user_id_var, width=20)
+        self.debug_group_user_id_entry.pack(side=tk.LEFT)
 
         # 创建部门信息区域（第四行）
         dept_info_frame = ttk.Frame(action_group_frame)
@@ -1128,12 +1424,14 @@ class MainWindow:
         # 创建者姓名
         ttk.Label(dept_info_frame, text="创建者姓名:").pack(side=tk.LEFT, padx=(0, 5))
         self.debug_group_user_name_var = tk.StringVar()
-        ttk.Entry(dept_info_frame, textvariable=self.debug_group_user_name_var, width=20).pack(side=tk.LEFT, padx=(0, 20))
+        self.debug_group_user_name_entry=ttk.Entry(dept_info_frame, textvariable=self.debug_group_user_name_var, width=20)
+        self.debug_group_user_name_entry.pack(side=tk.LEFT, padx=(0, 20))
         
         # 科室ID
         ttk.Label(dept_info_frame, text="科室:").pack(side=tk.LEFT, padx=(0, 5))
         self.debug_department_id_var = tk.StringVar()
-        ttk.Entry(dept_info_frame, textvariable=self.debug_department_id_var, width=10).pack(side=tk.LEFT)
+        self.debug_department_id_entry=ttk.Entry(dept_info_frame, textvariable=self.debug_department_id_var, width=10)
+        self.debug_department_id_entry.pack(side=tk.LEFT)
 
         # 创建描述区域（第六行）
         desc_frame = ttk.Frame(action_group_frame)
@@ -1142,7 +1440,8 @@ class MainWindow:
         # 调试行为组备注
         ttk.Label(desc_frame, text="描述:").pack(side=tk.LEFT, padx=(0, 5))
         self.debug_group_desc_var = tk.StringVar()
-        ttk.Entry(desc_frame, textvariable=self.debug_group_desc_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.debug_group_desc_entry=ttk.Entry(desc_frame, textvariable=self.debug_group_desc_var, width=50)
+        self.debug_group_desc_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # 配置grid权重
         action_group_frame.grid_columnconfigure(0, weight=1)
@@ -1173,10 +1472,14 @@ class MainWindow:
         button_frame = ttk.Frame(left_panel)
         button_frame.grid(row=2, column=0, sticky=tk.EW, padx=5, pady=5)
         
-        ttk.Button(button_frame, text="新建", command=self._new_debug_action_group).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="编辑", command=self._edit_debug_action_group).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="图像采集", command=self._capture_debug_image).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="刷新", command=self._refresh_debug_action_group).pack(side=tk.LEFT, padx=5)
+        self.btn_new_debug_action_group=ttk.Button(button_frame, text="新建", command=self._new_debug_action_group)
+        self.btn_new_debug_action_group.pack(side=tk.LEFT, padx=5)
+        self.btn_edit_debug_action_group=ttk.Button(button_frame, text="编辑", command=self._edit_debug_action_group)
+        self.btn_edit_debug_action_group.pack(side=tk.LEFT, padx=5)
+        self.btn_capture_debug_image=ttk.Button(button_frame, text="图像采集", command=self._capture_debug_image)
+        self.btn_capture_debug_image.pack(side=tk.LEFT, padx=5)
+        self.btn_refresh_debug_action_group=ttk.Button(button_frame, text="刷新", command=self._refresh_debug_action_group)
+        self.btn_refresh_debug_action_group.pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="删除", command=self._delete_debug_action_group).pack(side=tk.LEFT, padx=5)
         
         # 配置grid权重，使树形视图可以随窗口调整大小
@@ -1215,10 +1518,14 @@ class MainWindow:
         button_frame = ttk.Frame(middle_panel)
         button_frame.grid(row=1, column=0, sticky=tk.EW, padx=5, pady=5)
         
-        ttk.Button(button_frame, text="创建", command=self._create_debug_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="修改", command=self._modify_debug_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="删除", command=self._delete_debug_action).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="保存", command=self._save_debug_action).pack(side=tk.LEFT, padx=5)
+        self.btn_create_debug_action=ttk.Button(button_frame, text="创建", command=self._create_debug_action)
+        self.btn_create_debug_action.pack(side=tk.LEFT, padx=5)
+        self.btn_modify_debug_action=ttk.Button(button_frame, text="修改", command=self._modify_debug_action)
+        self.btn_modify_debug_action.pack(side=tk.LEFT, padx=5)
+        self.btn_delete_debug_action=ttk.Button(button_frame, text="删除", command=self._delete_debug_action)
+        self.btn_delete_debug_action.pack(side=tk.LEFT, padx=5)
+        self.btn_save_debug_action=ttk.Button(button_frame, text="保存", command=self._save_debug_action)
+        self.btn_save_debug_action.pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="调用套餐", command=self._use_debug_suit).pack(side=tk.LEFT, padx=5)
         
         # 配置grid权重
@@ -1242,12 +1549,14 @@ class MainWindow:
         # 调试行为名称
         ttk.Label(basic_info_frame, text="名称:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.debug_action_name_var = tk.StringVar()
-        ttk.Entry(basic_info_frame, textvariable=self.debug_action_name_var).grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        self.debug_action_name_entry=ttk.Entry(basic_info_frame, textvariable=self.debug_action_name_var)
+        self.debug_action_name_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
         
         # 下一步调试行为
         ttk.Label(basic_info_frame, text="下一步:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.debug_next_action_var = tk.StringVar()
-        ttk.Entry(basic_info_frame, textvariable=self.debug_next_action_var).grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        self.debug_next_action_entry=ttk.Entry(basic_info_frame, textvariable=self.debug_next_action_var)
+        self.debug_next_action_entry.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
         
         # 调试行为类型
         ttk.Label(basic_info_frame, text="类型:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
@@ -1265,12 +1574,14 @@ class MainWindow:
         # 调试返回行为
         ttk.Label(basic_info_frame, text="返回:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
         self.debug_return_action_var = tk.StringVar()
-        ttk.Entry(basic_info_frame, textvariable=self.debug_return_action_var).grid(row=3, column=1, sticky=tk.EW, padx=5, pady=5)
+        self.debug_return_action_entry=ttk.Entry(basic_info_frame, textvariable=self.debug_return_action_var)
+        self.debug_return_action_entry.grid(row=3, column=1, sticky=tk.EW, padx=5, pady=5)
         
         # 调试行为备注
         ttk.Label(basic_info_frame, text="备注:").grid(row=4, column=0, sticky=tk.W, padx=5, pady=5)
         self.debug_action_note_var = tk.StringVar()
-        ttk.Entry(basic_info_frame, textvariable=self.debug_action_note_var).grid(row=4, column=1, sticky=tk.EW, padx=5, pady=5)
+        self.debug_action_note_entry=ttk.Entry(basic_info_frame, textvariable=self.debug_action_note_var)
+        self.debug_action_note_entry.grid(row=4, column=1, sticky=tk.EW, padx=5, pady=5)
         
         #调试行为详情
         self.debug_tab_action_detail = ttk.Frame(detail_frame)
@@ -1334,10 +1645,14 @@ class MainWindow:
         middle_panel.grid(row=0, column=1, sticky=tk.NS, padx=5, pady=5)
         
         # 创建按钮
-        ttk.Button(middle_panel, text="患者出院", command=self._patient_discharge).grid(row=0, column=0, pady=5)
-        ttk.Button(middle_panel, text="患者归档", command=self._patient_archive).grid(row=1, column=0, pady=5)
-        ttk.Button(middle_panel, text="出院撤销", command=self._cancel_discharge).grid(row=2, column=0, pady=5)
-        ttk.Button(middle_panel, text="归档撤销", command=self._cancel_archive).grid(row=3, column=0, pady=5)
+        self.btn_patient_discharge=ttk.Button(middle_panel, text="患者出院", command=self._patient_discharge)
+        self.btn_patient_discharge.grid(row=0, column=0, pady=5)
+        self.btn_patient_archive=ttk.Button(middle_panel, text="患者归档", command=self._patient_archive)
+        self.btn_patient_archive.grid(row=1, column=0, pady=5)
+        self.btn_cancel_discharge=ttk.Button(middle_panel, text="出院撤销", command=self._cancel_discharge)
+        self.btn_cancel_discharge.grid(row=2, column=0, pady=5)
+        self.btn_cancel_archive=ttk.Button(middle_panel, text="归档撤销", command=self._cancel_archive)
+        self.btn_cancel_archive.grid(row=3, column=0, pady=5)
         
         # 创建右侧面板（出院患者）
         left1_panel = ttk.LabelFrame(workspace_frame, text="出院患者")
@@ -2025,6 +2340,7 @@ class MainWindow:
         ttk.Label(self.action_debug_detail, text="AI输入文本:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
         self.debug_ai_illustration_var = tk.StringVar(self.window)
         ttk.Entry(self.action_debug_detail, textvariable=self.debug_ai_illustration_var).grid(row=3, column=1, sticky=tk.EW, padx=5, pady=5)
+
         
         # 备注信息
         ttk.Label(self.action_debug_detail, text="备注信息:").grid(row=4, column=0, sticky=tk.W, padx=5, pady=5)
@@ -2358,3 +2674,180 @@ class MainWindow:
         for k, v in matches:
             result[k] = int(v)
         return result
+
+        
+    def _delete_debug_action(self):
+        """删除选中的调试行为"""
+        pass
+        
+    def _save_debug_action(self):
+        """保存调试行为的修改"""
+        pass
+        
+    def _use_debug_suit(self):
+        """调用调试行为套餐"""
+        pass
+
+    def parse_group_rank(self, rank: str):
+        """
+        解析GroupRank字符串，返回分层级字典。
+        例如：A2B1C1D1E1 -> {'A': 2, 'B': 1, 'C': 1, 'D': 1, 'E': 1}
+        """
+        import re
+        result = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0}
+        if not rank:
+            return result
+        matches = re.findall(r'([ABCDE])(\d+)', rank)
+        for k, v in matches:
+            result[k] = int(v)
+        return result
+    def iid_to_group_rank(self,iid: str) -> str:
+        """
+        根据树节点iid（如A2B1C1D1E1、A1B1、A2等）复原标准group_rank字符串（A2B1C0D0E0等）。
+        """
+        import re
+        # 先解析已有的级别
+        result = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0}
+        matches = re.findall(r'([ABCDE])(\d+)', iid)
+        for k, v in matches:
+            result[k] = int(v)
+        # 拼接成标准格式
+        return f"A{result['A']}B{result['B']}C{result['C']}D{result['D']}E{result['E']}" 
+    
+    def _on_action_tree_select(self, event=None):        
+        selected = self.action_tree.selection()
+        if not selected:
+            return
+        iid = selected[0]
+        # 先全部禁用
+        self._set_home_controls_state('disabled')
+        # 只让"创建者姓名"、"科室"不可用，其他可用
+        for entry in [
+            self.group_name_entry, self.group_last_circle_local_entry, self.group_last_circle_node_entry,
+            self.group_setup_time_entry, self.group_update_time_entry, self.group_user_id_entry,
+            self.is_auto_check, self.auto_time_entry, self.group_desc_entry
+        ]:
+            entry.config(state='normal')
+        self.group_user_name_entry.config(state='disabled')
+        self.department_id_entry.config(state='disabled')
+        try:
+            # 判断节点类型
+            if iid.startswith("group_"):
+                # 选中的是ActionGroup
+                group_id = int(iid.split("_")[1])
+                # 查询ActionGroup和其关联的ActionsGroupHierarchy
+                from sqlalchemy.orm import sessionmaker
+                from sqlalchemy import create_engine
+                from config.config_manager import ConfigManager
+                from models.actions import ActionGroup, ActionsGroupHierarchy, ActionList
+                from models.user import User
+                config = ConfigManager()
+                db_url = f"sqlite:///{config.get_value('System', 'DataSource')}"
+                engine = create_engine(db_url)
+                Session = sessionmaker(bind=engine)
+                session = Session()
+                group = session.query(ActionGroup).filter_by(id=group_id).first()
+                if group:
+                    # Left1_panel按钮可用
+                    for btn in [
+                        self.btn_new_group, self.btn_record_action, self.btn_modify_action,
+                        self.btn_delete_action, self.btn_save_action, self.btn_use_suit
+                    ]:
+                        btn.config(state='normal')
+
+                    hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                    # 填充详情区
+                    self.group_last_circle_local_entry.config(state= 'normal')
+                    self.group_last_circle_local_var.set(group.last_circle_local or "")
+                    self.group_name_entry.config(state = 'normal')
+                    print("set StringVar", id(self.group_name_var))
+                    self.group_name_var.set(group.action_list_group_name)
+                    print("set StringVar", id(self.group_name_var))
+                    print('group_name_var' + self.group_name_var.get())
+                    print('group_name_var' + group.action_list_group_name)
+                    print('group_name_entry state:', self.group_name_entry.cget("state"))
+                    print('group_name_entry value:', self.group_name_entry.get())
+                    print("StringVar id:", id(self.group_name_var))
+                    print("Entry textvariable id:", id(self.group_name_entry.cget('textvariable')))
+                    self.window.update()
+                    self.group_last_circle_node_var.set(group.last_circle_node or "")
+                    self.group_setup_time_var.set(str(group.setup_time or ""))
+                    self.group_update_time_var.set(str(group.update_time or ""))
+                    self.group_user_id_var.set(str(group.user_id or ""))
+                    user = session.query(User).filter_by(user_id=group.user_id).first()
+                    self.group_user_name_var.set(user.username if user else "")
+                    self.department_id_var.set(str(group.department_id or ""))
+                    self.is_auto_var.set(bool(group.is_auto or False))
+                    self.auto_time_var.set(str(group.auto_time or ""))
+                    self.group_desc_var.set(group.action_list_group_note or "")
+                    # 检查变量是否绑定到控件（假设有一个 Entry）
+                    if hasattr(self, 'group_name_entry'):
+                        print("绑定的控件值:", self.group_name_entry.get())
+                    else:
+                        print("警告：变量未绑定到控件！")
+                    self.group_name_entry.update_idletasks
+                    # 填充action_list_tree
+                    self.action_list.delete(*self.action_list.get_children())
+                    actions = session.query(ActionList).filter_by(group_id=group_id).all()
+                    for action in actions:
+                        self.action_list.insert("", "end", iid=str(action.id), values=(
+                            action.action_type, action.action_name, action.next_id
+                        ))
+                session.close()
+            else:
+                # 选中的是ActionsGroupHierarchy
+                # 通过idd复原node的group_rank。
+                
+                from sqlalchemy.orm import sessionmaker
+                from sqlalchemy import create_engine
+                from config.config_manager import ConfigManager
+                from models.actions import ActionsGroupHierarchy
+                config = ConfigManager()
+                db_url = f"sqlite:///{config.get_value('System', 'DataSource')}"
+                engine = create_engine(db_url)
+                Session = sessionmaker(bind=engine)
+                session = Session()
+                selected_group_rank = self.iid_to_group_rank(iid)
+                hierarchy = session.query(ActionsGroupHierarchy).filter_by(group_rank=selected_group_rank).first()
+                if hierarchy:
+                    print("set StringVar", id(self.group_name_var))
+                    self.group_name_var.set(hierarchy.group_name)
+                    print("set StringVar", id(self.group_name_var))
+                    # 其他字段根据实际表结构补充
+                    self.group_last_circle_local_var.set("")
+                    self.group_last_circle_node_var.set("")
+                    self.group_setup_time_var.set(str(hierarchy.created_at or ""))
+                    self.group_update_time_var.set(str(hierarchy.updated_at or ""))
+                    self.group_user_id_var.set(str(hierarchy.doctor_id or ""))
+                    self.group_user_name_var.set("")  # 可查user表
+                    self.department_id_var.set(str(hierarchy.department_id or ""))
+                    self.is_auto_var.set(False)
+                    self.auto_time_var.set("")
+                    self.group_desc_var.set(hierarchy.group_note or "")
+                session.close()
+                # Left_panel按钮可用
+                for btn in [
+                    self.btn_new_action_group, self.btn_edit_action_group, self.btn_capture_image,
+                    self.btn_refresh_action_group, self.btn_delete_action_group
+                ]:
+                    btn.config(state='normal')
+                # Left1_panel按钮不可用
+                for btn in [
+                    self.btn_new_group, self.btn_record_action, self.btn_modify_action,
+                    self.btn_delete_action, self.btn_save_action, self.btn_use_suit
+                ]:
+                    btn.config(state='disabled')
+                # 清空action_list_tree
+                self.action_list.delete(*self.action_list.get_children())
+        except Exception as e:
+            print(e)
+
+    def _set_home_controls_state(self, state):
+        for ctrl in [
+            self.group_name_entry, self.group_last_circle_local_entry, self.group_last_circle_node_entry,
+            self.group_setup_time_entry, self.group_update_time_entry, self.group_user_id_entry,
+            self.is_auto_check, self.auto_time_entry, self.group_desc_entry
+        ]:
+            ctrl.config(state=state)
+        self.group_user_name_entry.config(state='disabled')
+        self.department_id_entry.config(state='disabled')

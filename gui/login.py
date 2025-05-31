@@ -47,14 +47,21 @@ class LoginWindow:
         self.username_var.set("admin")
         self.username_entry = ttk.Entry(main_frame, textvariable=self.username_var, width=30)
         self.username_entry.grid(row=1, column=1, pady=5)
-        
+        self.username_var.set('admin2')
         # 密码
         ttk.Label(main_frame, text="密码:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.password_var = tk.StringVar()
         self.password_var.set("admin")
         self.password_entry = ttk.Entry(main_frame, textvariable=self.password_var, width=30, show="*")
         self.password_entry.grid(row=2, column=1, pady=5)
-        
+         # 添加诊断信息
+        print("登录窗体诊断信息:")
+        print(f"1. StringVar 值: {self.username_var.get()}")
+        print(f"2. Entry 控件值: {self.username_entry.get()}")
+        print(f"3. Entry 状态: {self.username_entry.cget('state')}")
+        print(f"4. StringVar ID: {id(self.username_var)}")
+        print(f"5. Entry 的 textvariable ID: {id(self.username_entry.cget('textvariable'))}")
+
         # 按钮框架
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=3, column=0, columnspan=2, pady=20)
