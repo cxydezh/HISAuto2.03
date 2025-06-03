@@ -15,7 +15,7 @@ class LoginWindow:
         """
         self.window = tk.Tk()
         self.window.title("智能自动化办公系统 - 登录")
-        self.window.geometry("400x300")
+        self.window.geometry("400x600")
         self.window.resizable(False, False)
         
         # 设置窗口图标
@@ -47,21 +47,12 @@ class LoginWindow:
         self.username_var.set("admin")
         self.username_entry = ttk.Entry(main_frame, textvariable=self.username_var, width=30)
         self.username_entry.grid(row=1, column=1, pady=5)
-        self.username_var.set('admin2')
         # 密码
         ttk.Label(main_frame, text="密码:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.password_var = tk.StringVar()
         self.password_var.set("admin")
         self.password_entry = ttk.Entry(main_frame, textvariable=self.password_var, width=30, show="*")
         self.password_entry.grid(row=2, column=1, pady=5)
-         # 添加诊断信息
-        print("登录窗体诊断信息:")
-        print(f"1. StringVar 值: {self.username_var.get()}")
-        print(f"2. Entry 控件值: {self.username_entry.get()}")
-        print(f"3. Entry 状态: {self.username_entry.cget('state')}")
-        print(f"4. StringVar ID: {id(self.username_var)}")
-        print(f"5. Entry 的 textvariable ID: {id(self.username_entry.cget('textvariable'))}")
-
         # 按钮框架
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=3, column=0, columnspan=2, pady=20)
@@ -100,8 +91,13 @@ class LoginWindow:
             success_login,is_super_user = self.on_login_success(username, password)
             if success_login:
                 self.login_attempts = 0  # 重置登录尝试次数
+                # 先隐藏登录窗口
+                self.hide()
+                # 创建主窗口
                 main_window = MainWindow(username=username, is_super_admin=is_super_user)
+                # 销毁登录窗口
                 self.destroy()
+                # 显示主窗口
                 main_window.show()
                 
             else:
@@ -115,8 +111,8 @@ class LoginWindow:
                     messagebox.showerror("登录失败", f"登录失败！还剩 {remaining} 次尝试机会。")
         except Exception as e:
             logger.info(f"登录失败: {str(e)}")
+            messagebox.showerror("登录失败", f"登录失败: {str(e)}")
             
-                
     def _handle_register(self):
         """处理注册事件"""
         # TODO: 实现注册功能
@@ -124,6 +120,9 @@ class LoginWindow:
         
     def show(self):
         """显示登录窗口"""
+        # 确保窗口在前台
+        self.window.lift()
+        self.window.focus_force()
         self.window.mainloop()
         
     def hide(self):
