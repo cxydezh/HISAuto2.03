@@ -15,7 +15,7 @@ class LoginWindow:
         """
         self.window = tk.Tk()
         self.window.title("智能自动化办公系统 - 登录")
-        self.window.geometry("400x600")
+        self.window.geometry("400x300")
         self.window.resizable(False, False)
         
         # 设置窗口图标

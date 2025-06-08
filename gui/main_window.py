@@ -53,54 +53,6 @@ class MainWindow:
         confirm_btn = ttk.Button(time_picker, text="确定", command=confirm_time)
         confirm_btn.grid(row=2, column=0, columnspan=2, pady=10)
         
-    def show_mode_picker(self, root):
-        """显示模式选择器"""
-        def confirm_module():
-            self.module_select_node = local_mode_var.get()
-            select_mode.destroy()
-            
-        select_mode = tk.Toplevel(root)
-        select_mode.title("选择模式")
-        select_mode.geometry("400x200")
-        select_mode.transient(root)
-        select_mode.grab_set()
-        select_mode.focus_set()
-
-        local_mode_frame = ttk.Frame(select_mode)
-        local_mode_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
-        local_mode_var = tk.IntVar()
-        
-        label_local = ttk.Label(local_mode_frame, text='选择插入位置:', font=("Arial", 12))
-        label_local.pack(pady=10)
-        
-        # 根据当前选中的节点类型显示不同的选项
-        if hasattr(self, 'home_tab') and hasattr(self.home_tab, 'action_tree'):
-            selected = self.home_tab.action_tree.selection()
-            if not selected:
-                messagebox.showwarning("警告", "请选择节点")
-                local_mode_var.set(5)
-                select_mode.destroy()
-                return
-            elif selected[0].startswith("group_"):
-                ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
-                ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
-            elif selected[0].startswith("A"):
-                ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
-                ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
-                ttk.Radiobutton(local_mode_frame, text ='插入子项', variable=local_mode_var, value=3).pack(pady=5)
-            else:
-                messagebox.showwarning("警告", "节点的内容出现错误，请修复")
-                local_mode_var.set(5)
-                select_mode.destroy()
-                return
-        else:
-            # 默认选项
-            ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
-            ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
-            
-        confirm_btn = ttk.Button(local_mode_frame, text="确定", command=confirm_module)
-        confirm_btn.pack(pady=10)
 
     def __init__(self, username: str, is_super_admin: bool = False, engine=None,master=None):
         """

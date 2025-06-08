@@ -13,7 +13,7 @@ import re
 class HomeTab(BaseTab):
     def __init__(self, notebook, main_window):
         super().__init__(notebook, main_window, "首页")
-        
+        self.my_window = main_window.window
         # 初始化实例变量
         self.actiongroup_hierarchy_tree_iid = None
         self.action_list_tree_iid = None
@@ -70,8 +70,8 @@ class HomeTab(BaseTab):
         ttk.Label(excel_frame, text="Excel路径:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.excel_path_var = tk.StringVar()
         ttk.Entry(excel_frame, textvariable=self.excel_path_var, width=50).grid(row=0, column=1, columnspan=2, sticky=tk.EW, padx=5, pady=5)
-        btn_add_excel_file = ttk.Button(excel_frame, text="添加", command=self._add_excel_file, state="disabled")
-        btn_add_excel_file.grid(row=0, column=3, padx=5, pady=5)
+        self.btn_add_excel_file = ttk.Button(excel_frame, text="添加", command=self._add_excel_file, state="disabled")
+        self.btn_add_excel_file.grid(row=0, column=3, padx=5, pady=5)
         
         # Sheet编号和监测字段
         ttk.Label(excel_frame, text="Sheet编号:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
@@ -522,7 +522,7 @@ class HomeTab(BaseTab):
         for entry in [
             self.group_name_entry, self.group_last_circle_local_entry, self.group_last_circle_node_entry,
             self.group_setup_time_entry, self.group_update_time_entry, self.group_user_id_entry,
-            self.is_auto_check, self.auto_time_entry, self.group_desc_entry
+            self.is_auto_check, self.auto_time_entry, self.group_desc_entry,self.btn_import_excel,self.btn_add_excel_file
         ]:
             entry.config(state='normal')
         self.group_user_name_entry.config(state='disabled')
@@ -539,6 +539,7 @@ class HomeTab(BaseTab):
                 # 选中的是ActionGroup
                 group_id = int(iid.split("_")[1])
                 group = session.query(ActionGroup).filter_by(id=group_id).first()
+                self.actiongroup_hierarchy_tree_iid = group.group_rank_id
                 if group:
                     # 启用按钮
                     for btn in [
@@ -572,6 +573,7 @@ class HomeTab(BaseTab):
             else:
                 # 选中的是ActionsGroupHierarchy
                 selected_group_rank = self.iid_to_group_rank(iid)
+                self.actiongroup_hierarchy_tree_iid = selected_group_rank
                 hierarchy = session.query(ActionsGroupHierarchy).filter_by(group_rank=selected_group_rank).first()
                 if hierarchy:
                     self.group_name_var.set(hierarchy.group_name or "")
@@ -774,7 +776,17 @@ class HomeTab(BaseTab):
     # 行为组操作方法
     def _new_action_group(self):
         """新建行为组"""
-        messagebox.showinfo("提示", "新建行为组功能待实现")
+        #先判断是否有Hierarchy tree是否有被选中的项目
+        selected_iid = self.action_tree.selection()[0]
+        selected_group_rank = self.iid_to_group_rank(selected_iid)
+        if self.actiongroup_hierarchy_tree_iid == None: 
+            messagebox.showinfo("提示", "新建行为组功能待实现")
+            return
+        #调用show_mode_picker方法,获取用户的新建意图
+        self.module_select_node = self.show_mode_picker(self.my_window)
+        if self.module_select_node == None:
+            return
+
         
     def _edit_action_group(self):
         """编辑行为组"""
@@ -1486,3 +1498,49 @@ class HomeTab(BaseTab):
         # 这里需要根据action.action_type的不同类型，填充对应的控件数据
         # 具体实现根据数据库字段结构而定
         pass
+    def show_mode_picker(self, root):
+        """显示模式选择器"""
+        def confirm_module():
+            self.module_select_node = local_mode_var.get()
+            select_mode.destroy()
+            
+        select_mode = tk.Toplevel(root)
+        select_mode.title("选择模式")
+        select_mode.geometry("400x200")
+        select_mode.resizable(False, False)
+
+        select_mode.transient(root)
+        select_mode.grab_set()
+        select_mode.focus_set()
+
+        local_mode_frame = ttk.Frame(select_mode)
+        local_mode_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        local_mode_var = tk.IntVar()
+        
+        label_local = ttk.Label(local_mode_frame, text='选择插入位置:', font=("Arial", 12))
+        label_local.pack(pady=10)
+        
+        # 根据当前选中的节点类型显示不同的选项
+        selected = self.action_tree.selection()[0]
+        if not selected:
+            messagebox.showwarning("警告", "请选择节点")
+            local_mode_var.set(5)
+            select_mode.destroy()
+            return
+        elif selected.startswith("group_"):
+            ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
+            ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
+        elif selected.startswith("A"):
+            ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
+            ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
+            ttk.Radiobutton(local_mode_frame, text ='插入子项', variable=local_mode_var, value=3).pack(pady=5)
+        else:
+            messagebox.showwarning("警告", "节点的内容出现错误，请修复")
+            local_mode_var.set(5)
+            select_mode.destroy()
+            return
+            
+        confirm_btn = ttk.Button(local_mode_frame, text="确定", command=confirm_module)
+        confirm_btn.pack(pady=10)
+        root.wait_window(select_mode)

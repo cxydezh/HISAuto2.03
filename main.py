@@ -4,7 +4,7 @@ import globalvariable
 # 添加项目根目录到 Python 路径
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
-
+import tkinter as tk
 from config.config_manager import ConfigManager
 from utils.logger import Logger,logger
 from database.db_manager import DatabaseManager
