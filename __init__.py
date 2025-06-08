@@ -1,0 +1,3 @@
+"""
+HISAuto package initialization
+""" 
