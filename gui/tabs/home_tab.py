@@ -783,7 +783,8 @@ class HomeTab(BaseTab):
             messagebox.showinfo("提示", "新建行为组功能待实现")
             return
         #调用show_mode_picker方法,获取用户的新建意图
-        self.module_select_node = self.show_mode_picker(self.my_window)
+        self.show_mode_picker(self.my_window)
+        messagebox.showinfo("提示", f"module_select_node: {self.module_select_node}")
         if self.module_select_node == None:
             return
 
@@ -1503,10 +1504,11 @@ class HomeTab(BaseTab):
         def confirm_module():
             self.module_select_node = local_mode_var.get()
             select_mode.destroy()
+            return self.module_select_node
             
         select_mode = tk.Toplevel(root)
         select_mode.title("选择模式")
-        select_mode.geometry("400x200")
+        select_mode.geometry("400x300")
         select_mode.resizable(False, False)
 
         select_mode.transient(root)
