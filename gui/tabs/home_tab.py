@@ -8,7 +8,7 @@ from config.config_manager import ConfigManager
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 import globalvariable
-import re
+from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
 
 class HomeTab(BaseTab):
     def __init__(self, notebook, main_window):
@@ -18,8 +18,10 @@ class HomeTab(BaseTab):
         self.actiongroup_hierarchy_tree_iid = None
         self.action_list_tree_iid = None
         self.action_debug_list_tree_iid = None
-        self.module_select_node = None
-        
+        self.relate_location_selected = None
+        self.action_group_selected_rank = None
+        self.hierarchy_sort = None
+        self.relateLocationSelected = None
         # 创建界面
         self._create_widgets()
         
@@ -222,14 +224,18 @@ class HomeTab(BaseTab):
         tree_frame.grid_columnconfigure(0, weight=1)
         
     def _create_action_group_buttons(self, parent):
-        """创建行为组按钮"""
+        """创建行为组相关按钮"""
         button_frame = ttk.Frame(parent)
         button_frame.grid(row=3, column=0, sticky=tk.EW, padx=5, pady=5)
         
+        self.btn_new_action_group_group = ttk.Button(button_frame, text="新建组", command=self._new_action_group_group, state="disabled")
+        self.btn_new_action_group_group.pack(side=tk.LEFT, padx=5)
         self.btn_new_action_group = ttk.Button(button_frame, text="新建", command=self._new_action_group, state="disabled")
         self.btn_new_action_group.pack(side=tk.LEFT, padx=5)
         self.btn_edit_action_group = ttk.Button(button_frame, text="编辑", command=self._edit_action_group, state="disabled")
         self.btn_edit_action_group.pack(side=tk.LEFT, padx=5)
+        self.btn_save_action_group = ttk.Button(button_frame, text="保存", command=self._save_action_group, state="disabled")
+        self.btn_save_action_group.pack(side=tk.LEFT, padx=5)
         self.btn_capture_image = ttk.Button(button_frame, text="图像采集", command=self._capture_image, state="disabled")
         self.btn_capture_image.pack(side=tk.LEFT, padx=5)
         self.btn_refresh_action_group = ttk.Button(button_frame, text="刷新", command=self._refresh_action_group, state="disabled")
@@ -488,25 +494,6 @@ class HomeTab(BaseTab):
     def _save_excel_settings(self):
         """保存Excel设置"""
         messagebox.showinfo("提示", "Excel设置保存功能待实现")
-
-    # 行为组树相关方法
-    def parse_group_rank(self, rank: str):
-        """解析GroupRank字符串，返回分层级字典"""
-        result = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0}
-        if not rank:
-            return result
-        matches = re.findall(r'([ABCDE])(\d+)', rank)
-        for k, v in matches:
-            result[k] = int(v)
-        return result
-
-    def iid_to_group_rank(self, iid: str) -> str:
-        """根据树节点iid复原标准group_rank字符串"""
-        result = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0}
-        matches = re.findall(r'([ABCDE])(\d+)', iid)
-        for k, v in matches:
-            result[k] = int(v)
-        return f"A{result['A']}B{result['B']}C{result['C']}D{result['D']}E{result['E']}"
     
     def _on_action_tree_select(self, event=None):
         """行为组树选择事件处理"""
@@ -570,9 +557,13 @@ class HomeTab(BaseTab):
                         self.action_list.insert("", "end", iid=str(action.id), values=(
                             action.action_type, action.action_name, action.next_id
                         ))
+                    #获取group_rank_id对应的ActionsGroupHierarchy
+                    group_rank_id = group.group_rank_id
+                    hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group_rank_id).first()
+                    self.hierarchy_sort.set(hierarchy.sort_num)
             else:
                 # 选中的是ActionsGroupHierarchy
-                selected_group_rank = self.iid_to_group_rank(iid)
+                selected_group_rank = iid_to_group_rank(iid)
                 self.actiongroup_hierarchy_tree_iid = selected_group_rank
                 hierarchy = session.query(ActionsGroupHierarchy).filter_by(group_rank=selected_group_rank).first()
                 if hierarchy:
@@ -587,10 +578,10 @@ class HomeTab(BaseTab):
                     self.is_auto_var.set(False)
                     self.auto_time_var.set("")
                     self.group_desc_var.set(hierarchy.group_note or "")
-                
+                    self.hierarchy_sort = hierarchy.sort_num
                 # 启用左侧按钮
                 for btn in [
-                    self.btn_new_action_group, self.btn_edit_action_group, self.btn_capture_image,
+                    self.btn_new_action_group_group, self.btn_new_action_group, self.btn_edit_action_group, self.btn_capture_image,
                     self.btn_refresh_action_group, self.btn_delete_action_group
                 ]:
                     btn.config(state='normal')
@@ -604,7 +595,7 @@ class HomeTab(BaseTab):
                 
                 # 清空action_list_tree
                 self.action_list.delete(*self.action_list.get_children())
-                
+            self.action_group_selected_rank = selected_group_rank
             session.close()
         except Exception as e:
             print(f"Error in _on_action_tree_select: {e}")
@@ -633,12 +624,12 @@ class HomeTab(BaseTab):
             self.action_tree.delete(*self.action_tree.get_children())
             
             # 查询所有行为组层级，按group_rank排序
-            hierarchies = session.query(ActionsGroupHierarchy).order_by(ActionsGroupHierarchy.group_rank).all()
+            hierarchies = session.query(ActionsGroupHierarchy).order_by(ActionsGroupHierarchy.sort_num,ActionsGroupHierarchy.group_rank).all()
             
             # 构建分层树结构
             tree_dict = {}
             for h in hierarchies:
-                rank_dict = self.parse_group_rank(h.group_rank)
+                rank_dict = parse_group_rank(h.group_rank)
                 key = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
                 
                 # 根据用户权限过滤
@@ -661,7 +652,7 @@ class HomeTab(BaseTab):
             
             # 建立父子关系
             for key, node in tree_dict.items():
-                rank = self.parse_group_rank(key)
+                rank = parse_group_rank(key)
                 
                 # 确定父节点key和当前节点iid
                 if rank['E'] > 0:
@@ -717,7 +708,7 @@ class HomeTab(BaseTab):
             # 插入顶层节点（A级节点，B=C=D=E=0）
             inserted_nodes = set()  # 记录已插入的节点，避免重复
             for key, node in tree_dict.items():
-                rank = self.parse_group_rank(key)
+                rank = parse_group_rank(key)
                 if (rank['B'] == 0 and rank['C'] == 0 and 
                     rank['D'] == 0 and rank['E'] == 0):
                     if key not in inserted_nodes:
@@ -735,7 +726,7 @@ class HomeTab(BaseTab):
                 if not rank_record:
                     continue
                     
-                rank_dict = self.parse_group_rank(rank_record.group_rank)
+                rank_dict = parse_group_rank(rank_record.group_rank)
                 
                 # 确定行为组应该插入到哪个层级节点下
                 if rank_dict['E'] > 0:
@@ -772,26 +763,87 @@ class HomeTab(BaseTab):
         except Exception as e:
             print(f"Error in _refresh_action_group: {e}")
             messagebox.showerror("错误", f"刷新行为组失败: {e}")
-            
+    def _new_action_group_group(self):
+        """新建行为组组"""
+        #先判断是否有Hierarchy tree是否有被选中的项目
+        selected_iid = self.action_tree.selection()[0]
+        if self.actiongroup_hierarchy_tree_iid == None: 
+            messagebox.showinfo("提示", "请先选择行为组")
+            return
+        
+        #调用show_mode_picker方法,获取用户的新建意图
+        self.show_mode_picker(self.my_window)
+        if self.relate_location_selected == None:
+            return
+        from utils.actionGroupHierarchyManager import ActionGroupHierarchy_Manager
+        ActionGroupHierarchy_Manager(self.my_window, self.actiongroup_hierarchy_tree_iid, self.relate_location_selected, self.hierarchy_sort)
+        #关闭窗口
+
+        #刷新行为组树
+        self._refresh_action_group()
+        
     # 行为组操作方法
     def _new_action_group(self):
         """新建行为组"""
         #先判断是否有Hierarchy tree是否有被选中的项目
         selected_iid = self.action_tree.selection()[0]
-        selected_group_rank = self.iid_to_group_rank(selected_iid)
         if self.actiongroup_hierarchy_tree_iid == None: 
-            messagebox.showinfo("提示", "新建行为组功能待实现")
+            messagebox.showinfo("提示", "请先选择行为组")
             return
         #调用show_mode_picker方法,获取用户的新建意图
         self.show_mode_picker(self.my_window)
-        messagebox.showinfo("提示", f"module_select_node: {self.module_select_node}")
-        if self.module_select_node == None:
+        if self.relate_location_selected == None:
+            return
+        #初始化行为组控件的可用状态
+        self.group_name_entry.config(state='normal')
+        self.group_last_circle_local_entry.config(state='disabled')
+        self.group_last_circle_node_entry.config(state='disabled')
+        self.group_setup_time_entry.config(state='disabled')
+        self.group_update_time_entry.config(state='disabled')
+        self.is_auto_check.config(state='normal')
+        self.auto_time_entry.config(state='normal')
+        self.group_desc_entry.config(state='normal')
+
+        #初始化行为组信息
+        self.group_name_var.set("")
+        self.group_last_circle_local_var.set("")
+        self.group_last_circle_node_var.set("")
+        self.group_setup_time_var.set(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        self.group_update_time_var.set("")
+        self.group_user_id_var.set(globalvariable.USER_ID)
+        self.is_auto_var.set(False)
+        self.auto_time_var.set("")
+        self.group_desc_var.set("")
+        
+        #修改行为组相关按钮
+        self.btn_new_action_group.config(state='disabled')
+        self.btn_edit_action_group.config(state='disabled')
+        self.btn_delete_action_group.config(state='normal')
+        self.btn_capture_image.config(state='normal')
+        self.btn_save_action_group.config(state='normal')
+        self.btn_refresh_action_group.config(state='normal')
+
+    def _edit_action_group(self):
+        #先判断是否有Hierarchy tree是否有被选中的项目
+        selected_iid = self.action_tree.selection()[0]
+        if self.actiongroup_hierarchy_tree_iid == None: 
+            messagebox.showinfo("提示", "请先选择行为组")
+            return
+        #调用show_mode_picker方法,获取用户的新建意图
+        self.show_mode_picker(self.my_window)
+        if self.relate_location_selected == None:
             return
 
-        
-    def _edit_action_group(self):
-        """编辑行为组"""
-        messagebox.showinfo("提示", "编辑行为组功能待实现")
+        #修改行为组相关按钮
+        self.btn_new_action_group.config(state='disabled')
+        self.btn_edit_action_group.config(state='disabled')
+        self.btn_delete_action_group.config(state='normal')
+        self.btn_capture_image.config(state='normal')
+        self.btn_save_action_group.config(state='normal')
+        self.btn_refresh_action_group.config(state='normal')
+    def _save_action_group(self):
+        """保存行为组"""
+        messagebox.showinfo("提示", "保存行为组功能待实现")
         
     def _capture_image(self):
         """图像采集"""
@@ -1433,7 +1485,7 @@ class HomeTab(BaseTab):
                         ))
             else:
                 # 选中的是ActionsGroupHierarchy
-                selected_group_rank = self.iid_to_group_rank(iid)
+                selected_group_rank = iid_to_group_rank(iid)
                 hierarchy = session.query(ActionsGroupHierarchy).filter_by(group_rank=selected_group_rank).first()
                 if hierarchy:
                     self.action_debug_name_var.set(hierarchy.group_name or "")
@@ -1502,9 +1554,9 @@ class HomeTab(BaseTab):
     def show_mode_picker(self, root):
         """显示模式选择器"""
         def confirm_module():
-            self.module_select_node = local_mode_var.get()
+            self.relate_location_selected = local_mode_var.get()
             select_mode.destroy()
-            return self.module_select_node
+            return self.relate_location_selected
             
         select_mode = tk.Toplevel(root)
         select_mode.title("选择模式")
@@ -1533,7 +1585,7 @@ class HomeTab(BaseTab):
         elif selected.startswith("group_"):
             ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
             ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
-        elif selected.startswith("A"):
+        elif selected.startswith("A") and not selected.endswith("E"):
             ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
             ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
             ttk.Radiobutton(local_mode_frame, text ='插入子项', variable=local_mode_var, value=3).pack(pady=5)
@@ -1546,3 +1598,8 @@ class HomeTab(BaseTab):
         confirm_btn = ttk.Button(local_mode_frame, text="确定", command=confirm_module)
         confirm_btn.pack(pady=10)
         root.wait_window(select_mode)
+            
+
+        
+        
+
