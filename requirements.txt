@@ -12,3 +12,5 @@ mouse==0.7.1
 pysqlcipher3==1.2.0
 sqlite3==2.6.0
 psutil==6.0.0
+pillow==11.1.0
+pywin32==306

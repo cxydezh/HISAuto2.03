@@ -10,6 +10,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 import globalvariable
 from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
+import os
+import sys
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from utils.screenshot_tool import ScreenshotTool
 
 class HomeTab(BaseTab):
     def __init__(self, notebook, main_window):
@@ -222,6 +229,16 @@ class HomeTab(BaseTab):
         self.action_tree.heading("userid", text="创建者")
         self.action_tree.column("userid", width=50)
         
+        # 创建右键菜单
+        self.tree_context_menu = tk.Menu(self.action_tree, tearoff=0)
+        self.tree_context_menu.add_command(label="新建组", command=self._new_action_group_group)
+        self.tree_context_menu.add_command(label="排序↑", command=self._sort_action_group_up)
+        self.tree_context_menu.add_command(label="排序↓", command=self._sort_action_group_down)
+        self.tree_context_menu.add_command(label="删除", command=self._delete_action_group)
+        
+        # 绑定右键菜单
+        self.action_tree.bind("<Button-3>", self._show_tree_context_menu)
+        
         # 滚动条
         tree_scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.action_tree.yview)
         self.action_tree.configure(yscrollcommand=tree_scroll.set)
@@ -234,14 +251,60 @@ class HomeTab(BaseTab):
         # 配置权重
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
+
+    def _show_tree_context_menu(self, event):
+        """显示树形视图的右键菜单"""
+        # 获取点击位置的项
+        item = self.action_tree.identify_row(event.y)
+        if item:
+            # 选中该项
+            self.action_tree.selection_set(item)
+            # 显示菜单
+            self.tree_context_menu.post(event.x_root, event.y_root)
+
+    def _sort_action_group_up(self):
+        """将选中的行为组向上移动"""
+        selected = self.action_tree.selection()
+        if not selected:
+            return
+            
+        item = selected[0]
+        parent = self.action_tree.parent(item)
+        if not parent:  # 如果是根节点，不处理
+            return
+            
+        # 获取同级所有项
+        siblings = self.action_tree.get_children(parent)
+        current_index = siblings.index(item)
         
+        if current_index > 0:  # 如果不是第一个
+            # 移动项
+            self.action_tree.move(item, parent, current_index - 1)
+            
+    def _sort_action_group_down(self):
+        """将选中的行为组向下移动"""
+        selected = self.action_tree.selection()
+        if not selected:
+            return
+            
+        item = selected[0]
+        parent = self.action_tree.parent(item)
+        if not parent:  # 如果是根节点，不处理
+            return
+            
+        # 获取同级所有项
+        siblings = self.action_tree.get_children(parent)
+        current_index = siblings.index(item)
+        
+        if current_index < len(siblings) - 1:  # 如果不是最后一个
+            # 移动项
+            self.action_tree.move(item, parent, current_index + 1)
+    
     def _create_action_group_buttons(self, parent):
         """创建行为组相关按钮"""
         button_frame = ttk.Frame(parent)
         button_frame.grid(row=3, column=0, sticky=tk.EW, padx=5, pady=5)
         
-        self.btn_new_action_group_group = ttk.Button(button_frame, text="新建组", command=self._new_action_group_group, state="disabled")
-        self.btn_new_action_group_group.pack(side=tk.LEFT, padx=5)
         self.btn_new_action_group = ttk.Button(button_frame, text="新建", command=self._new_action_group, state="disabled")
         self.btn_new_action_group.pack(side=tk.LEFT, padx=5)
         self.btn_edit_action_group = ttk.Button(button_frame, text="编辑", command=self._edit_action_group, state="disabled")
@@ -548,8 +611,8 @@ class HomeTab(BaseTab):
                     self.group_name_var.set(group.action_list_group_name or "")
                     self.group_last_circle_local_var.set(group.last_circle_local or "")
                     self.group_last_circle_node_var.set(group.last_circle_node or "")
-                    self.group_setup_time_var.set(str(group.setup_time or ""))
-                    self.group_update_time_var.set(str(group.update_time or ""))
+                    self.group_setup_time_var.set(str(group.created_at or ""))
+                    self.group_update_time_var.set(str(group.updated_at or ""))
                     self.group_user_id_var.set(str(group.user_id or ""))
                     
                     user = session.query(User).filter_by(user_id=group.user_id).first()
@@ -782,7 +845,7 @@ class HomeTab(BaseTab):
         """新建行为组组"""
         #先判断是否有Hierarchy tree是否有被选中的项目
         selected_iid = self.action_tree.selection()[0]
-        if self.actiongroup_hierarchy_tree_iid == None: 
+        if self.action_group_hierarchy_tree_iid == None: 
             messagebox.showinfo("提示", "请先选择行为组")
             return
         
@@ -872,7 +935,23 @@ class HomeTab(BaseTab):
         self.btn_save_action_group.config(state='disabled')
     def _capture_image(self):
         """图像采集"""
-        messagebox.showinfo("提示", "图像采集功能待实现")
+        from utils.screenshot_tool import ScreenshotTool
+        
+        # 获取当前选中的行为组
+        selected = self.action_tree.selection()
+        if not selected:
+            messagebox.showwarning("警告", "请先选择一个行为组")
+            return
+            
+        # 获取行为组名称
+        group_name = self.action_tree.item(selected[0])['values'][0]
+        
+        # 创建截图保存路径
+        save_path = os.path.join("images", group_name)
+        
+        # 创建截图工具实例并执行截图
+        screenshot_tool = ScreenshotTool()
+        screenshot_tool.capture(save_path, group_name)
     def _delete_action_group(self):
         """删除行为组"""
         selected = self.action_tree.selection()
@@ -1165,14 +1244,74 @@ class HomeTab(BaseTab):
         if not selected:
             return
             
-        action_id = int(selected[0])
+        # 获取选中项的数据
+        item = selected[0]
+        values = self.action_list.item(item)['values']
+        action_type = values[0]  # 类型在values[0]
+        action_name = values[1]  # 名称在values[1]
+        next_action = values[2]  # 下一步在values[2]
         
+        # 清空动态区域
+        for widget in self.action_list_frame.winfo_children():
+            widget.destroy()
+            
+        # 根据类型创建对应的控件
+        if action_type == "mouse":
+            self._create_mouse_controls()
+        elif action_type == "keyboard":
+            self._create_keyboard_controls()
+        elif action_type == "class":
+            self._create_class_controls()
+        elif action_type == "AI":
+            self._create_ai_controls()
+        elif action_type == "image":
+            self._create_image_controls()
+        elif action_type == "function":
+            self._create_function_controls()
+            
         # 启用相关控件
         for entry in [
             self.action_name_entry, self.next_action_entry, self.action_type_combo,
             self.debug_group_id_entry, self.action_note_entry
         ]:
             entry.config(state='normal')
+            
+        # 填充基本信息
+        self.action_name_var.set(action_name)
+        self.next_action_var.set(next_action)
+        self.action_type_var.set(action_type)
+        
+        # 从数据库获取详细数据
+        try:
+            # 获取当前选中的行为组
+            group_selected = self.action_tree.selection()
+            if not group_selected:
+                return
+                
+            group_id = self.action_tree.item(group_selected[0])['values'][0]
+            
+            # 从数据库获取行为数据
+            from models.actions import ActionMouse, ActionKeyboard, ActionCodeTxt, ActionPrintscreen, ActionAI, ActionFunction, ActionClass
+            if action_type == "mouse":
+                action_data = ActionMouse.get_action_by_group_id(group_id)
+            elif action_type == "keyboard":
+                action_data = ActionKeyboard.get_action_by_group_id(group_id)
+            elif action_type == "class":
+                action_data = ActionClass.get_action_by_group_id(group_id)
+            elif action_type == "AI":
+                action_data = ActionAI.get_action_by_group_id(group_id)
+            elif action_type == "image":
+                action_data = ActionPrintscreen.get_action_by_group_id(group_id)
+            elif action_type == "function":
+                action_data = ActionFunction.get_action_by_group_id(group_id)
+            elif action_type == "codetxt":
+                action_data = ActionCodeTxt.get_action_by_group_id(group_id)
+            
+            # 填充详细数据
+            self._fill_action_data(action_data)
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"获取行为数据失败：{str(e)}")
     
     # 行为操作方法  
     def _create_action(self):
@@ -1585,10 +1724,63 @@ class HomeTab(BaseTab):
     # =============================================================================
     
     def _fill_action_data(self, action):
-        """根据action数据填充具体控件"""
-        # 这里需要根据action.action_type的不同类型，填充对应的控件数据
-        # 具体实现根据数据库字段结构而定
-        pass
+        """填充行为数据到控件
+        
+        Args:
+            action: 行为数据对象
+        """
+        if not action:
+            return
+            
+        # 根据不同类型填充对应的控件
+        action_type = action.get('type', '')
+        
+        if action_type == 'mouse':
+            # 填充鼠标控件数据
+            self.action_mouse_action_type_var.set(action.get('mouse_action', ''))
+            self.action_mouse_size_var.set(action.get('mouse_size', ''))
+            self.action_mouse_x_var.set(action.get('x', ''))
+            self.action_mouse_y_var.set(action.get('y', ''))
+            self.action_mouse_time_diff_var.set(action.get('time_diff', ''))
+            
+        elif action_type == 'keyboard':
+            # 填充键盘控件数据
+            self.action_keyboard_type_var.set(action.get('keyboard_action', ''))
+            self.action_keyboard_value_var.set(action.get('key', ''))
+            self.action_keyboard_time_diff_var.set(action.get('time_diff', ''))
+            
+        elif action_type == 'class':
+            # 填充类控件数据
+            self.action_class_name_var.set(action.get('class_name', ''))
+            self.action_window_title_var.set(action.get('window_title', ''))
+            self.action_class_time_diff_var.set(action.get('time_diff', ''))
+            
+        elif action_type == 'AI':
+            # 填充AI控件数据
+            self.action_ai_training_group_var.set(action.get('training_group', ''))
+            self.action_ai_record_name_var.set(action.get('record_name', ''))
+            self.action_ai_long_text_name_var.set(action.get('long_text_name', ''))
+            self.action_ai_illustration_var.set(action.get('illustration', ''))
+            self.action_ai_note_var.set(action.get('note', ''))
+            self.action_ai_time_diff_var.set(action.get('time_diff', ''))
+            
+        elif action_type == 'image':
+            # 填充图像控件数据
+            self.action_image_left_top_x_var.set(action.get('left_top_x', ''))
+            self.action_image_left_top_y_var.set(action.get('left_top_y', ''))
+            self.action_image_right_bottom_x_var.set(action.get('right_bottom_x', ''))
+            self.action_image_right_bottom_y_var.set(action.get('right_bottom_y', ''))
+            self.action_image_names_var.set(action.get('image_names', ''))
+            self.action_image_match_criteria_var.set(action.get('match_criteria', ''))
+            self.image_mouse_action_var.set(action.get('mouse_action', ''))
+            self.image_time_diff_var.set(action.get('time_diff', ''))
+            
+        elif action_type == 'function':
+            # 填充函数控件数据
+            self.action_function_name_var.set(action.get('function_name', ''))
+            self.action_function_parameters_var.set(action.get('parameters', ''))
+            self.action_function_arguments_var.set(action.get('arguments', ''))
+            self.function_time_diff_var.set(action.get('time_diff', ''))
     def show_mode_picker(self, root):
         """显示模式选择器"""
         def confirm_module():

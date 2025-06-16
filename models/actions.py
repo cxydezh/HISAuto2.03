@@ -18,6 +18,21 @@ class ActionMouse(BaseModel):
     # 关系
     action_list = relationship("ActionList", back_populates="mouse_actions")
 
+
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionMouse).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
+
     def __repr__(self):
         return f"<ActionMouse(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -34,6 +49,19 @@ class ActionKeyboard(BaseModel):
     # 关系
     action_list = relationship("ActionList", back_populates="keyboard_actions")
 
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionKeyboard).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     def __repr__(self):
         return f"<ActionKeyboard(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -50,6 +78,19 @@ class ActionCodeTxt(BaseModel):
     # 关系
     action_list = relationship("ActionList", back_populates="code_text_actions")
 
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionCodeTxt).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     def __repr__(self):
         return f"<ActionCodeTxt(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -72,6 +113,19 @@ class ActionPrintscreen(BaseModel):
     # 关系
     action_list = relationship("ActionList", back_populates="printscreen_actions")
 
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionPrintscreen).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     def __repr__(self):
         return f"<ActionPrintscreen(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -91,6 +145,8 @@ class ActionAI(BaseModel):
     # 关系
     action_list = relationship("ActionList", back_populates="ai_actions")
 
+    def get_action_by_group_id(group_id, action_name):
+        return ActionAI.query.filter_by(action_list_id=group_id, action_name=action_name).first()
     def __repr__(self):
         return f"<ActionAI(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -109,6 +165,8 @@ class ActionFunction(BaseModel):
     # 关系
     action_list = relationship("ActionList", back_populates="function_actions")
 
+    def get_action_by_group_id(group_id, action_name):
+        return ActionFunction.query.filter_by(action_list_id=group_id, action_name=action_name).first()
     def __repr__(self):
         return f"<ActionFunction(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -125,6 +183,8 @@ class ActionClass(BaseModel):
     # 关系
     action_list = relationship("ActionList", back_populates="class_actions")
 
+    def get_action_by_group_id(group_id, action_name):
+        return ActionClass.query.filter_by(action_list_id=group_id, action_name=action_name).first()
     def __repr__(self):
         return f"<ActionClass(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -138,8 +198,6 @@ class ActionList(BaseModel):
     action_name = Column(String(200))  # 行为名称
     next_id = Column(Integer)  # 下一步ID
     debug_group_id = Column(Integer)  # Debug调试用ID
-    setup_time = Column(DateTime)  # 设置时间
-    update_time = Column(DateTime)  # 更新时间
     action_note = Column(String(500))  # 行为元备注
 
     # 关系
@@ -169,8 +227,6 @@ class ActionGroup(BaseModel):
     last_circle_local = Column(Integer)
     last_circle_node = Column(Integer)
     about_time = Column(String(50))
-    setup_time = Column(DateTime)
-    update_time = Column(DateTime)
     user_id = Column(String(50), ForeignKey('users.user_id'))
     department_id = Column(Integer, ForeignKey('departments.code'))
     action_list_group_note = Column(String(500))

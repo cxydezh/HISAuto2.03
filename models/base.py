@@ -11,8 +11,8 @@ class BaseModel(Base):
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime, nullable=True, default=datetime.now)
+    updated_at = Column(DateTime, nullable=True, default=datetime.now, onupdate=datetime.now)
     note = Column(String(500))  # 备注
 
     def to_dict(self):

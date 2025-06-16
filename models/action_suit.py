@@ -12,6 +12,19 @@ class ActionSuitMouse(BaseModel):
     mouse_size = Column(Float)  # 鼠标动作大小(用于记录滚轮动作的大小)
     action_list_id = Column(Integer, ForeignKey('actions_suit_list.id'))  # 外键，与ActionsSuitList中的ID关联
 
+    def get_action_by_group_id(group_id): 
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionSuitMouse).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionsSuitList", back_populates="mouse_actions")
 
@@ -25,6 +38,19 @@ class ActionSuitKeyboard(BaseModel):
     keyboard_value = Column(String(500))  # 按键值或文本内容
     action_list_id = Column(Integer, ForeignKey('actions_suit_list.id'))  # 外键，与ActionsSuitList中的ID关联
 
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionSuitKeyboard).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionsSuitList", back_populates="keyboard_actions")
 
@@ -38,6 +64,19 @@ class ActionSuitCodeTxt(BaseModel):
     code_tips = Column(String(500))  # 密码文本的提示文本内容
     action_list_id = Column(Integer, ForeignKey('actions_suit_list.id'))  # 外键，与ActionsSuitList中的ID关联
 
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionSuitCodeTxt).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionsSuitList", back_populates="code_text_actions")
 
@@ -57,6 +96,19 @@ class ActionSuitPrintscreen(BaseModel):
     mouse_action = Column(Integer, default=0)  # 鼠标动作(0:无,1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
     action_list_id = Column(Integer, ForeignKey('actions_suit_list.id'))  # 外键，与ActionsSuitList中的ID关联
 
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionSuitPrintscreen).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionsSuitList", back_populates="printscreen_actions")
 
@@ -73,6 +125,19 @@ class ActionSuitAI(BaseModel):
     ai_note = Column(String(500))  # 备注信息
     action_list_id = Column(Integer, ForeignKey('actions_suit_list.id'))  # 外键，与ActionsSuitList中的ID关联
 
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionSuitAI).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionsSuitList", back_populates="ai_actions")
 
@@ -88,7 +153,20 @@ class ActionSuitFunction(BaseModel):
     args_list = Column(String(500))  # 函数参数列表所在位置
     action_list_id = Column(Integer, ForeignKey('actions_suit_list.id'))  # 外键，与ActionsSuitList中的ID关联
 
-    # 关系
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionSuitFunction).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
+        # 关系
     action_list = relationship("ActionsSuitList", back_populates="function_actions")
 
 class ActionSuitClass(BaseModel):
@@ -101,7 +179,20 @@ class ActionSuitClass(BaseModel):
     windows_title = Column(String(500))  # 窗体名
     action_list_id = Column(Integer, ForeignKey('actions_suit_list.id'))  # 外键，与ActionsSuitList中的ID关联
 
-    # 关系
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionSuitClass).filter_by(action_list_id=group_id).first()
+        session.close()
+        return action
+        # 关系
     action_list = relationship("ActionsSuitList", back_populates="class_actions")
 
 class ActionsSuitList(BaseModel):
@@ -115,8 +206,6 @@ class ActionsSuitList(BaseModel):
     action_name = Column(String(200))  # 行为名称
     next_id = Column(Integer)  # 下一步ID
     debug_group_id = Column(Integer)  # Debug调试用ID
-    setup_time = Column(DateTime)  # 设置时间
-    update_time = Column(DateTime)  # 更新时间
     action_note = Column(String(500))  # 行为元备注
 
     # 关系
@@ -144,8 +233,6 @@ class ActionsSuitGroup(BaseModel):
     last_circle_local = Column(Integer)  # 上一次循环位置
     last_circle_node = Column(Integer)  # 上一次循环节点
     about_time = Column(String(50))  # 预计时间
-    setup_time = Column(DateTime)  # 设置时间
-    update_time = Column(DateTime)  # 更新时间
     department_id = Column(Integer, ForeignKey('departments.code'))  # 科室code 
     user_id = Column(Integer, ForeignKey('users.id'))  # 用户ID
     action_list_group_note = Column(String(500))  # 行为组备注
