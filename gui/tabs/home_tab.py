@@ -1742,6 +1742,7 @@ class HomeTab(BaseTab):
             self.action_mouse_x_var.set(action.get('x', ''))
             self.action_mouse_y_var.set(action.get('y', ''))
             self.action_mouse_time_diff_var.set(action.get('time_diff', ''))
+            print(self.action_mouse_x_var)
             
         elif action_type == 'keyboard':
             # 填充键盘控件数据
