@@ -4,7 +4,7 @@ import globalvariable
 # 添加项目根目录到 Python 路径
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
-
+import tkinter as tk
 from config.config_manager import ConfigManager
 from utils.logger import Logger,logger
 from database.db_manager import DatabaseManager
@@ -111,7 +111,6 @@ def handle_login(username: str, password: str):
     #    return True, False  # 返回 (登录成功, 是否为超级管理员)
     #else:
     #    raise Exception("用户名或密码错误")
-
 def main():
     """主程序入口"""
     try:

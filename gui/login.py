@@ -34,36 +34,27 @@ class LoginWindow:
     def _create_widgets(self):
         """创建登录界面的控件"""
         # 创建主框架
-        main_frame = ttk.Frame(self.window, padding="20")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.main_frame = ttk.Frame(self.window, padding="20")
+        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # 标题
-        title_label = ttk.Label(main_frame, text="智能自动化办公系统", font=("Arial", 16, "bold"))
+        title_label = ttk.Label(self.main_frame, text="智能自动化办公系统", font=("Arial", 16, "bold"))
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
         
         # 用户名
-        ttk.Label(main_frame, text="用户名:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(self.main_frame, text="用户名:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.username_var = tk.StringVar()
         self.username_var.set("admin")
-        self.username_entry = ttk.Entry(main_frame, textvariable=self.username_var, width=30)
+        self.username_entry = ttk.Entry(self.main_frame, textvariable=self.username_var, width=30)
         self.username_entry.grid(row=1, column=1, pady=5)
-        self.username_var.set('admin2')
         # 密码
-        ttk.Label(main_frame, text="密码:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(self.main_frame, text="密码:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.password_var = tk.StringVar()
         self.password_var.set("admin")
-        self.password_entry = ttk.Entry(main_frame, textvariable=self.password_var, width=30, show="*")
+        self.password_entry = ttk.Entry(self.main_frame, textvariable=self.password_var, width=30, show="*")
         self.password_entry.grid(row=2, column=1, pady=5)
-         # 添加诊断信息
-        print("登录窗体诊断信息:")
-        print(f"1. StringVar 值: {self.username_var.get()}")
-        print(f"2. Entry 控件值: {self.username_entry.get()}")
-        print(f"3. Entry 状态: {self.username_entry.cget('state')}")
-        print(f"4. StringVar ID: {id(self.username_var)}")
-        print(f"5. Entry 的 textvariable ID: {id(self.username_entry.cget('textvariable'))}")
-
         # 按钮框架
-        button_frame = ttk.Frame(main_frame)
+        button_frame = ttk.Frame(self.main_frame)
         button_frame.grid(row=3, column=0, columnspan=2, pady=20)
         
         # 登录按钮
@@ -100,10 +91,17 @@ class LoginWindow:
             success_login,is_super_user = self.on_login_success(username, password)
             if success_login:
                 self.login_attempts = 0  # 重置登录尝试次数
-                main_window = MainWindow(username=username, is_super_admin=is_super_user)
-                self.destroy()
+                # 添加调试信息
+                print("[调试] 开始验证登录凭证")
+                # 正确的窗口切换流程
+                # 创建测试窗口实例
+                main_window = MainWindow(username=username, is_super_admin=is_super_user,master=self.window)
+                self.window.withdraw()  # 隐藏登录窗口
+                # 添加调试信息
+                main_window.window.protocol("WM_DELETE_WINDOW", lambda: (main_window.destroy(), self.window.destroy()))
+                print("[调试] 准备切换到测试窗口")
                 main_window.show()
-                
+
             else:
                 self.login_attempts += 1
                 if self.login_attempts >= self.max_attempts:
@@ -115,8 +113,8 @@ class LoginWindow:
                     messagebox.showerror("登录失败", f"登录失败！还剩 {remaining} 次尝试机会。")
         except Exception as e:
             logger.info(f"登录失败: {str(e)}")
+            messagebox.showerror("登录失败", f"登录失败: {str(e)}")
             
-                
     def _handle_register(self):
         """处理注册事件"""
         # TODO: 实现注册功能
@@ -124,12 +122,18 @@ class LoginWindow:
         
     def show(self):
         """显示登录窗口"""
+        # 确保窗口在前台
+        self.window.lift()
+        self.window.focus_force()
         self.window.mainloop()
         
     def hide(self):
         """隐藏登录窗口"""
         self.window.withdraw()
         
-    def destroy(self):
-        """销毁登录窗口"""
-        self.window.destroy() 
+    
+    #def destroy(self):
+    #    """销毁登录窗口"""
+     #   self.window.destroy() 
+      #  self.window.quit()  # 强制退出主事件循环
+    

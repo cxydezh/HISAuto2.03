@@ -8,7 +8,15 @@ import inspect
 from models.base import Base
 
 class DatabaseManager:
-    """数据库管理类，负责处理数据库连接和会话管理"""
+    """数据库管理类，负责处理数据库连接和会话管理,该类是单例模式,使用时需要先调用initialize方法初始化
+    使用方法:
+    db_manager = DatabaseManager()
+    db_manager.initialize()
+    db_manager.get_session()
+    db_manager.create_tables()
+    db_manager.drop_tables()
+    db_manager.execute_query()
+    """
     
     def __init__(self, db_path: str, encryption_key: str):
         """

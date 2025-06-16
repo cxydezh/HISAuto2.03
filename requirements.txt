@@ -11,3 +11,4 @@ cryptography==44.0.3
 mouse==0.7.1
 pysqlcipher3==1.2.0
 sqlite3==2.6.0
+psutil-7.0.0
