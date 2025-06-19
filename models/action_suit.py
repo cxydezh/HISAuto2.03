@@ -135,7 +135,7 @@ class ActionSuitAI(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionSuitAI).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionSuitAI).filter_by(id=group_id).first()
         session.close()
         return action
     # 关系
@@ -163,7 +163,7 @@ class ActionSuitFunction(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionSuitFunction).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionSuitFunction).filter_by(id=group_id).first()
         session.close()
         return action
         # 关系
@@ -189,7 +189,7 @@ class ActionSuitClass(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionSuitClass).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionSuitClass).filter_by(id=group_id).first()
         session.close()
         return action
         # 关系

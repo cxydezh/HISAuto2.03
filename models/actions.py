@@ -29,7 +29,7 @@ class ActionMouse(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionMouse).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionMouse).filter_by(id=group_id).first()
         session.close()
         return action
 
@@ -59,7 +59,7 @@ class ActionKeyboard(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionKeyboard).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionKeyboard).filter_by(id=group_id).first()
         session.close()
         return action
     def __repr__(self):
@@ -88,7 +88,7 @@ class ActionCodeTxt(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionCodeTxt).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionCodeTxt).filter_by(id=group_id).first()
         session.close()
         return action
     def __repr__(self):
@@ -123,7 +123,7 @@ class ActionPrintscreen(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionPrintscreen).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionPrintscreen).filter_by(id=group_id).first()
         session.close()
         return action
     def __repr__(self):
@@ -146,7 +146,7 @@ class ActionAI(BaseModel):
     action_list = relationship("ActionList", back_populates="ai_actions")
 
     def get_action_by_group_id(group_id, action_name):
-        return ActionAI.query.filter_by(action_list_id=group_id, action_name=action_name).first()
+        return ActionAI.query.filter_by(id=group_id, action_name=action_name).first()
     def __repr__(self):
         return f"<ActionAI(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -166,7 +166,7 @@ class ActionFunction(BaseModel):
     action_list = relationship("ActionList", back_populates="function_actions")
 
     def get_action_by_group_id(group_id, action_name):
-        return ActionFunction.query.filter_by(action_list_id=group_id, action_name=action_name).first()
+        return ActionFunction.query.filter_by(id=group_id, action_name=action_name).first()
     def __repr__(self):
         return f"<ActionFunction(id={self.id}, action_list_id={self.action_list_id})>"
 
@@ -184,7 +184,7 @@ class ActionClass(BaseModel):
     action_list = relationship("ActionList", back_populates="class_actions")
 
     def get_action_by_group_id(group_id, action_name):
-        return ActionClass.query.filter_by(action_list_id=group_id, action_name=action_name).first()
+        return ActionClass.query.filter_by(id=group_id, action_name=action_name).first()
     def __repr__(self):
         return f"<ActionClass(id={self.id}, action_list_id={self.action_list_id})>"
 

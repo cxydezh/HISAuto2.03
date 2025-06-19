@@ -391,10 +391,13 @@ class HomeTab(BaseTab):
         list_frame.grid(row=1, column=0, sticky=tk.NSEW, padx=5, pady=5)
         
         self.action_list = ttk.Treeview(list_frame, name='action_list_tree', 
-                                       columns=("type", "name", "next"), show="headings")
+                                       columns=("id", "type", "name", "next"), show="headings")
+        #设置Treeview的id列为隐藏
+        self.action_list.heading("id", text="ID")
         self.action_list.heading("type", text="类型")
         self.action_list.heading("name", text="名称")
         self.action_list.heading("next", text="下一步")
+        self.action_list.column("id", width=0, stretch=tk.NO)
         self.action_list.column("type", width=100)
         self.action_list.column("name", width=200)
         self.action_list.column("next", width=100)
@@ -629,7 +632,7 @@ class HomeTab(BaseTab):
                     actions = session.query(ActionList).filter_by(group_id=group_id).all()
                     for action in actions:
                         self.action_list.insert("", "end", iid=str(action.id), values=(
-                            action.action_type, action.action_name, action.next_id
+                            action.id,action.action_type, action.action_name, action.next_id
                         ))
                     self.hierarchy_sort = selected_group_hierarchy.sort_num
                     selected_group_rank = selected_group_hierarchy.group_rank
@@ -1247,9 +1250,10 @@ class HomeTab(BaseTab):
         # 获取选中项的数据
         item = selected[0]
         values = self.action_list.item(item)['values']
-        action_type = values[0]  # 类型在values[0]
-        action_name = values[1]  # 名称在values[1]
-        next_action = values[2]  # 下一步在values[2]
+        action_id = values[0]
+        action_type = values[1]  # 类型在values[0]
+        action_name = values[2]  # 名称在values[1]
+        next_action = values[3]  # 下一步在values[2]
         
         # 清空动态区域
         for widget in self.action_list_frame.winfo_children():
@@ -1281,38 +1285,10 @@ class HomeTab(BaseTab):
         self.next_action_var.set(next_action)
         self.action_type_var.set(action_type)
         
-        # 从数据库获取详细数据
-        try:
-            # 获取当前选中的行为组
-            group_selected = self.action_tree.selection()
-            if not group_selected:
-                return
-                
-            group_id = self.action_tree.item(group_selected[0])['values'][0]
             
-            # 从数据库获取行为数据
-            from models.actions import ActionMouse, ActionKeyboard, ActionCodeTxt, ActionPrintscreen, ActionAI, ActionFunction, ActionClass
-            if action_type == "mouse":
-                action_data = ActionMouse.get_action_by_group_id(group_id)
-            elif action_type == "keyboard":
-                action_data = ActionKeyboard.get_action_by_group_id(group_id)
-            elif action_type == "class":
-                action_data = ActionClass.get_action_by_group_id(group_id)
-            elif action_type == "AI":
-                action_data = ActionAI.get_action_by_group_id(group_id)
-            elif action_type == "image":
-                action_data = ActionPrintscreen.get_action_by_group_id(group_id)
-            elif action_type == "function":
-                action_data = ActionFunction.get_action_by_group_id(group_id)
-            elif action_type == "codetxt":
-                action_data = ActionCodeTxt.get_action_by_group_id(group_id)
-            
-            # 填充详细数据
-            self._fill_action_data(action_data)
-            
-        except Exception as e:
-            messagebox.showerror("错误", f"获取行为数据失败：{str(e)}")
-    
+        # 填充详细数据
+        self._fill_action_data(action_type,action_id)
+                # 从数据库获取详细数据
     # 行为操作方法  
     def _create_action(self):
         """创建行为"""
@@ -1723,65 +1699,91 @@ class HomeTab(BaseTab):
     # 辅助方法
     # =============================================================================
     
-    def _fill_action_data(self, action):
+    def _fill_action_data(self, action_type,action_id):
         """填充行为数据到控件
         
         Args:
             action: 行为数据对象
         """
-        if not action:
-            return
-            
-        # 根据不同类型填充对应的控件
-        action_type = action.get('type', '')
-        
-        if action_type == 'mouse':
-            # 填充鼠标控件数据
-            self.action_mouse_action_type_var.set(action.get('mouse_action', ''))
-            self.action_mouse_size_var.set(action.get('mouse_size', ''))
-            self.action_mouse_x_var.set(action.get('x', ''))
-            self.action_mouse_y_var.set(action.get('y', ''))
-            self.action_mouse_time_diff_var.set(action.get('time_diff', ''))
-            print(self.action_mouse_x_var)
-            
-        elif action_type == 'keyboard':
-            # 填充键盘控件数据
-            self.action_keyboard_type_var.set(action.get('keyboard_action', ''))
-            self.action_keyboard_value_var.set(action.get('key', ''))
-            self.action_keyboard_time_diff_var.set(action.get('time_diff', ''))
-            
-        elif action_type == 'class':
-            # 填充类控件数据
-            self.action_class_name_var.set(action.get('class_name', ''))
-            self.action_window_title_var.set(action.get('window_title', ''))
-            self.action_class_time_diff_var.set(action.get('time_diff', ''))
-            
-        elif action_type == 'AI':
-            # 填充AI控件数据
-            self.action_ai_training_group_var.set(action.get('training_group', ''))
-            self.action_ai_record_name_var.set(action.get('record_name', ''))
-            self.action_ai_long_text_name_var.set(action.get('long_text_name', ''))
-            self.action_ai_illustration_var.set(action.get('illustration', ''))
-            self.action_ai_note_var.set(action.get('note', ''))
-            self.action_ai_time_diff_var.set(action.get('time_diff', ''))
-            
-        elif action_type == 'image':
-            # 填充图像控件数据
-            self.action_image_left_top_x_var.set(action.get('left_top_x', ''))
-            self.action_image_left_top_y_var.set(action.get('left_top_y', ''))
-            self.action_image_right_bottom_x_var.set(action.get('right_bottom_x', ''))
-            self.action_image_right_bottom_y_var.set(action.get('right_bottom_y', ''))
-            self.action_image_names_var.set(action.get('image_names', ''))
-            self.action_image_match_criteria_var.set(action.get('match_criteria', ''))
-            self.image_mouse_action_var.set(action.get('mouse_action', ''))
-            self.image_time_diff_var.set(action.get('time_diff', ''))
-            
-        elif action_type == 'function':
-            # 填充函数控件数据
-            self.action_function_name_var.set(action.get('function_name', ''))
-            self.action_function_parameters_var.set(action.get('parameters', ''))
-            self.action_function_arguments_var.set(action.get('arguments', ''))
-            self.function_time_diff_var.set(action.get('time_diff', ''))
+        try:
+            # 获取当前选中的行为组
+            # 从数据库获取行为数据
+            from models.actions import ActionMouse, ActionKeyboard, ActionCodeTxt, ActionPrintscreen, ActionAI, ActionFunction, ActionClass,ActionList
+            if action_type == "mouse":
+                action_data = ActionMouse.get_action_by_group_id(action_id)
+            elif action_type == "keyboard":
+                action_data = ActionKeyboard.get_action_by_group_id(action_id)
+            elif action_type == "class":
+                action_data = ActionClass.get_action_by_group_id(action_id)
+            elif action_type == "AI":
+                action_data = ActionAI.get_action_by_group_id(action_id)
+            elif action_type == "image":
+                action_data = ActionPrintscreen.get_action_by_group_id(action_id)
+            elif action_type == "function":
+                action_data = ActionFunction.get_action_by_group_id(action_id)
+            elif action_type == "codetxt":
+                action_data = ActionCodeTxt.get_action_by_group_id(action_id)
+
+
+            if not action_data:
+                return
+            if action_type == 'mouse':
+                # 填充鼠标控件数据
+                self.action_mouse_action_type_var.set(action_data.mouse_action)
+                self.action_mouse_size_var.set(action_data.mouse_size)
+                self.action_mouse_x_var.set(action_data.x)
+                self.action_mouse_y_var.set(action_data.y)
+                self.action_mouse_time_diff_var.set(action_data.time_diff)
+                print(self.action_mouse_x_var)
+                
+            elif action_type == 'keyboard':
+                # 填充键盘控件数据
+                self.action_keyboard_type_var.set(action_data.keyboard_type)
+                self.action_keyboard_value_var.set(action_data.keyboard_value)
+                self.action_keyboard_time_diff_var.set(action_data.time_diff)
+                
+            elif action_type == 'class':
+                # 填充类控件数据
+                self.action_class_name_var.set(action_data.class_name)
+                self.action_window_title_var.set(action_data.windows_title)
+                self.action_class_time_diff_var.set(action_data.time_diff)
+                
+            elif action_type == 'AI':
+                # 填充AI控件数据
+                self.action_ai_training_group_var.set(action_data.training_group)
+                self.action_ai_record_name_var.set(action_data.train_long_name)
+                self.action_ai_long_text_name_var.set(action_data.long_txt_name)
+                self.action_ai_illustration_var.set(action_data.ai_illustration)
+                self.action_ai_note_var.set(action_data.ai_note)
+                self.action_ai_time_diff_var.set(action_data.time_diff)
+                
+            elif action_type == 'image':
+                # 填充图像控件数据
+                self.action_image_left_top_x_var.set(action_data.lux)
+                self.action_image_left_top_y_var.set(action_data.luy)
+                self.action_image_right_bottom_x_var.set(action_data.rdx)
+                self.action_image_right_bottom_y_var.set(action_data.rdy)
+                self.action_image_names_var.set(action_data.pic_name)
+                self.action_image_match_criteria_var.set(action_data.match_picture_name)
+                self.image_mouse_action_var.set(action_data.mouse_action)
+                self.image_time_diff_var.set(action_data.time_diff)
+                
+            elif action_type == 'function':
+                # 填充函数控件数据
+                self.action_function_name_var.set(action_data.function_name)
+                self.action_function_parameters_var.set(action_data.args1)
+                self.action_function_arguments_var.set(action_data.args2)
+                self.function_time_diff_var.set(action_data.time_diff)
+            elif action_type == 'codetxt':
+                # 填充密码文本控件数据
+                self.action_codetxt_code_text_var.set(action_data.code_text)    
+                self.action_codetxt_code_tips_var.set(action_data.code_tips)
+                self.action_codetxt_time_diff_var.set(action_data.time_diff)
+                    
+        except Exception as e:
+            print("错误", f"获取行为数据失败：{str(e)}")
+    
+
     def show_mode_picker(self, root):
         """显示模式选择器"""
         def confirm_module():

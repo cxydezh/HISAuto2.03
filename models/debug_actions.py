@@ -12,8 +12,19 @@ class ActionDebugMouse(BaseModel):
     mouse_size = Column(Float)  # 鼠标动作大小(用于记录滚轮动作的大小)
     action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
 
-    def get_action_by_group_id(group_id, action_name):
-        return ActionDebugMouse.query.filter_by(action_list_id=group_id, action_name=action_name).first()
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionDebugMouse).filter_by(id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionDebugList", back_populates="mouse_actions")
 
@@ -27,8 +38,19 @@ class ActionDebugKeyboard(BaseModel):
     keyboard_value = Column(String(500))  # 按键值或文本内容
     action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
 
-    def get_action_by_group_id(group_id, action_name):
-        return ActionDebugKeyboard.query.filter_by(action_list_id=group_id, action_name=action_name).first()
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionDebugKeyboard).filter_by(id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionDebugList", back_populates="keyboard_actions")
 
@@ -42,8 +64,19 @@ class ActionDebugCodeTxt(BaseModel):
     code_tips = Column(String(500))  # 密码文本的提示文本内容
     action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
 
-    def get_action_by_group_id(group_id, action_name):
-        return ActionDebugCodeTxt.query.filter_by(action_list_id=group_id, action_name=action_name).first()
+    def get_action_by_group_id(group_id):
+        from database.db_manager import DatabaseManager 
+        from config.config_manager import ConfigManager
+
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+        db_manager = DatabaseManager(db_path, dp_encryption_key)
+        db_manager.initialize()
+        session = db_manager.get_session()
+        action = session.query(ActionDebugCodeTxt).filter_by(id=group_id).first()
+        session.close()
+        return action
     # 关系
     action_list = relationship("ActionDebugList", back_populates="code_text_actions")
 
@@ -71,7 +104,7 @@ class ActionDebugPrintscreen(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionDebugPrintscreen).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionDebugPrintscreen).filter_by(id=group_id).first()
         session.close()
         return action
     # 关系
@@ -99,7 +132,7 @@ class ActionDebugFunction(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionDebugFunction).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionDebugFunction).filter_by( id=group_id).first()
         session.close()
         return action
     # 关系
@@ -115,7 +148,7 @@ class ActionDebugClass(BaseModel):
     windows_title = Column(String(500))  # 窗体名
     action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
 
-    def get_action_by_group_id(group_id):
+    def get_action_by_group_id(group_id):   
         from database.db_manager import DatabaseManager 
         from config.config_manager import ConfigManager
 
@@ -125,7 +158,7 @@ class ActionDebugClass(BaseModel):
         db_manager = DatabaseManager(db_path, dp_encryption_key)
         db_manager.initialize()
         session = db_manager.get_session()
-        action = session.query(ActionDebugClass).filter_by(action_list_id=group_id).first()
+        action = session.query(ActionDebugClass).filter_by(id=group_id).first()
         session.close()
         return action
         # 关系
