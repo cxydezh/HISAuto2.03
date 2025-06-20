@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 from datetime import datetime
 from database.db_manager import DatabaseManager
 from gui.tabs.base_tab import BaseTab
-from models.actions import ActionGroup, ActionsGroupHierarchy, ActionList, ActionMouse, ActionKeyboard, ActionAI, ActionFunction, ActionClass, ActionPrintscreen
+from models.actions import ActionGroup, ActionsGroupHierarchy, ActionList, ActionMouse, ActionKeyboard, ActionAI, ActionFunction, ActionClass, ActionPrintscreen, ActionCodeTxt
 from models.user import User
 from config.config_manager import ConfigManager
 from sqlalchemy.orm import sessionmaker
@@ -17,6 +17,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from utils.screenshot_tool import ScreenshotTool
+from utils.home_tab_func import home_tab_func, ActionManager
 
 class HomeTab(BaseTab):
     def __init__(self, notebook, main_window):
@@ -41,11 +42,23 @@ class HomeTab(BaseTab):
         #选中行为组树形视图选中项的iid
         # 行为组树形视图选中项的rank中的A的值
         self.action_group_selected_Arank = None
+        
+        # 行为元操作相关全局变量
+        # 行为元操作类型，1:表示新增保存；2:表示修改保存；3:表示删除
+        self.action_operation_type = None
+        # 当前选中的行为元ID
+        self.current_action_id = None
+        # 当前选中的行为组ID（用于创建新行为元）
+        self.current_action_group_id = None
+        
         # 创建界面
         self._create_widgets()
         
         # 数据更新
         self._refresh_action_group()
+        
+        # 创建行为元管理器
+        self.action_manager = ActionManager(self)
         
     def _create_widgets(self):
         """创建首页标签页的所有控件"""
@@ -636,6 +649,9 @@ class HomeTab(BaseTab):
                         ))
                     self.hierarchy_sort = selected_group_hierarchy.sort_num
                     selected_group_rank = selected_group_hierarchy.group_rank
+                    
+                    # 启用中间面板按钮
+                    self._set_action_button_state()
             else:
                 # 选中的是ActionsGroupHierarchy
                 selected_group_rank = iid_to_group_rank(iid)
@@ -1245,15 +1261,19 @@ class HomeTab(BaseTab):
         """行为列表选择事件处理"""
         selected = self.action_list.selection()
         if not selected:
+            # 清空表单
+            self._clear_action_form()
+            # 更新按钮状态
+            self._update_action_buttons_state()
             return
             
         # 获取选中项的数据
         item = selected[0]
         values = self.action_list.item(item)['values']
         action_id = values[0]
-        action_type = values[1]  # 类型在values[0]
-        action_name = values[2]  # 名称在values[1]
-        next_action = values[3]  # 下一步在values[2]
+        action_type = values[1]  # 类型在values[1]
+        action_name = values[2]  # 名称在values[2]
+        next_action = values[3]  # 下一步在values[3]
         
         # 清空动态区域
         for widget in self.action_list_frame.winfo_children():
@@ -1273,49 +1293,58 @@ class HomeTab(BaseTab):
         elif action_type == "function":
             self._create_function_controls()
             
-        # 启用相关控件
-        for entry in [
-            self.action_name_entry, self.next_action_entry, self.action_type_combo,
-            self.debug_group_id_entry, self.action_note_entry
-        ]:
-            entry.config(state='normal')
+        # 在正常状态下禁用控件
+        if not self.action_operation_type:
+            for entry in [
+                self.action_name_entry, self.next_action_entry, self.action_type_combo,
+                self.debug_group_id_entry, self.action_note_entry
+            ]:
+                entry.config(state='disabled')
             
         # 填充基本信息
         self.action_name_var.set(action_name)
         self.next_action_var.set(next_action)
         self.action_type_var.set(action_type)
         
-            
         # 填充详细数据
-        self._fill_action_data(action_type,action_id)
-                # 从数据库获取详细数据
-    # 行为操作方法  
-    def _create_action(self):
-        """创建行为"""
-        messagebox.showinfo("提示", "创建行为功能待实现")
+        self._fill_action_data(action_type, action_id)
         
+        # 更新按钮状态
+        self._update_action_buttons_state()
+    
+    def _clear_action_form(self):
+        """清空行为表单"""
+        # 清空基本信息
+        self.action_name_var.set("")
+        self.next_action_var.set("")
+        self.action_type_var.set("")
+        self.debug_group_id.set("")
+        self.action_note_var.set("")
+        
+        # 清空动态详情区域
+        self._clear_action_detail_controls()
+        
+        # 修改按钮状态
+        self._set_action_button_state()
+        
+        # 触发行为类型变更事件以显示默认控件
+        self._on_action_type_changed()
+    
     def _record_action(self):
         """录制行为"""
         messagebox.showinfo("提示", "录制行为功能待实现")
         
     def _modify_action(self):
-        """修改行为"""
-        messagebox.showinfo("提示", "修改行为功能待实现")
-        
+        """修改行为元"""
+        return self.action_manager.modify_action()
     def _delete_action(self):
-        """删除行为"""
-        selected = self.action_list.selection()
-        if not selected:
-            messagebox.showwarning("警告", "请先选择要删除的行为")
-            return
-            
-        if messagebox.askyesno("确认", "确定要删除选中的行为吗？"):
-            messagebox.showinfo("提示", "删除行为功能待实现")
-            
+        """删除行为元"""
+        return self.action_manager.delete_action()
+    
     def _save_action(self):
-        """保存行为"""
-        messagebox.showinfo("提示", "保存行为功能待实现")
-        
+        """保存行为元"""
+        return self.action_manager.save_action()
+    
     def _use_suit(self):
         """调用套餐"""
         messagebox.showinfo("提示", "调用套餐功能待实现")
@@ -1859,3 +1888,267 @@ class HomeTab(BaseTab):
             self.btn_capture_image, self.btn_save_action_group, self.btn_refresh_action_group
         ]:
             ctrl.config(state=state)
+    
+    # =============================================================================
+    # 行为元操作辅助方法
+    # =============================================================================
+    
+    def _set_action_controls_state(self, state):
+        """设置行为元控件状态"""
+        for ctrl in [
+            self.action_name_entry, self.next_action_entry, self.action_type_combo,
+            self.debug_group_id_entry, self.action_note_entry
+        ]:
+            ctrl.config(state=state)
+    
+    def _set_action_button_state(self):
+        """设置行为元按钮状态"""
+        if self.action_operation_type in [1, 2]:  # 创建或修改状态
+            self.btn_create_action.config(state='disabled')
+            self.btn_record_action.config(state='disabled')
+            self.btn_modify_action.config(state='disabled')
+            self.btn_delete_action.config(state='disabled')
+            self.btn_save_action.config(state='normal')
+            self.btn_use_suit.config(state='disabled')
+        else:  # 正常状态
+            self.btn_create_action.config(state='normal')
+            self.btn_record_action.config(state='normal')
+            self.btn_modify_action.config(state='normal')
+            self.btn_delete_action.config(state='normal')
+            self.btn_save_action.config(state='disabled')
+            self.btn_use_suit.config(state='normal')
+    
+    def _clear_action_detail_controls(self):
+        """清空行为元详细控件"""
+        # 清空鼠标控件
+        if hasattr(self, 'action_mouse_action_type_var'):
+            self.action_mouse_action_type_var.set("")
+        if hasattr(self, 'action_mouse_size_var'):
+            self.action_mouse_size_var.set("")
+        if hasattr(self, 'action_mouse_x_var'):
+            self.action_mouse_x_var.set("")
+        if hasattr(self, 'action_mouse_y_var'):
+            self.action_mouse_y_var.set("")
+        if hasattr(self, 'action_mouse_time_diff_var'):
+            self.action_mouse_time_diff_var.set("")
+            
+        # 清空键盘控件
+        if hasattr(self, 'action_keyboard_type_var'):
+            self.action_keyboard_type_var.set("")
+        if hasattr(self, 'action_keyboard_value_var'):
+            self.action_keyboard_value_var.set("")
+        if hasattr(self, 'action_keyboard_time_diff_var'):
+            self.action_keyboard_time_diff_var.set("")
+            
+        # 清空类控件
+        if hasattr(self, 'action_class_name_var'):
+            self.action_class_name_var.set("")
+        if hasattr(self, 'action_window_title_var'):
+            self.action_window_title_var.set("")
+        if hasattr(self, 'action_class_time_diff_var'):
+            self.action_class_time_diff_var.set("")
+            
+        # 清空AI控件
+        if hasattr(self, 'action_ai_training_group_var'):
+            self.action_ai_training_group_var.set("")
+        if hasattr(self, 'action_ai_record_name_var'):
+            self.action_ai_record_name_var.set("")
+        if hasattr(self, 'action_ai_long_text_name_var'):
+            self.action_ai_long_text_name_var.set("")
+        if hasattr(self, 'action_ai_illustration_var'):
+            self.action_ai_illustration_var.set("")
+        if hasattr(self, 'action_ai_note_var'):
+            self.action_ai_note_var.set("")
+        if hasattr(self, 'action_ai_time_diff_var'):
+            self.action_ai_time_diff_var.set("")
+            
+        # 清空图像控件
+        if hasattr(self, 'action_image_left_top_x_var'):
+            self.action_image_left_top_x_var.set("")
+        if hasattr(self, 'action_image_left_top_y_var'):
+            self.action_image_left_top_y_var.set("")
+        if hasattr(self, 'action_image_right_bottom_x_var'):
+            self.action_image_right_bottom_x_var.set("")
+        if hasattr(self, 'action_image_right_bottom_y_var'):
+            self.action_image_right_bottom_y_var.set("")
+        if hasattr(self, 'action_image_names_var'):
+            self.action_image_names_var.set("")
+        if hasattr(self, 'action_image_match_criteria_var'):
+            self.action_image_match_criteria_var.set("")
+        if hasattr(self, 'image_mouse_action_var'):
+            self.image_mouse_action_var.set("")
+        if hasattr(self, 'image_time_diff_var'):
+            self.image_time_diff_var.set("")
+            
+        # 清空函数控件
+        if hasattr(self, 'action_function_name_var'):
+            self.action_function_name_var.set("")
+        if hasattr(self, 'action_function_parameters_var'):
+            self.action_function_parameters_var.set("")
+        if hasattr(self, 'action_function_arguments_var'):
+            self.action_function_arguments_var.set("")
+        if hasattr(self, 'function_time_diff_var'):
+            self.function_time_diff_var.set("")
+                
+    def _save_action_detail(self, session, action_list_id):
+        """保存行为元详细记录"""
+        action_type = self.action_type_var.get()
+        
+        if action_type == "mouse":
+            action_detail = ActionMouse(
+                mouse_action=self._get_mouse_action_code(self.action_mouse_action_type_var.get()),
+                mouse_size=float(self.action_mouse_size_var.get()) if self.action_mouse_size_var.get() else 0,
+                x=int(self.action_mouse_x_var.get()) if self.action_mouse_x_var.get() else 0,
+                y=int(self.action_mouse_y_var.get()) if self.action_mouse_y_var.get() else 0,
+                time_diff=float(self.action_mouse_time_diff_var.get()) if self.action_mouse_time_diff_var.get() else 0,
+                action_list_id=action_list_id
+            )
+            session.add(action_detail)
+            
+        elif action_type == "keyboard":
+            action_detail = ActionKeyboard(
+                keyboard_type=self._get_keyboard_type_code(self.action_keyboard_type_var.get()),
+                keyboard_value=self.action_keyboard_value_var.get(),
+                time_diff=float(self.action_keyboard_time_diff_var.get()) if self.action_keyboard_time_diff_var.get() else 0,
+                action_list_id=action_list_id
+            )
+            session.add(action_detail)
+            
+        elif action_type == "class":
+            action_detail = ActionClass(
+                class_name=self.action_class_name_var.get(),
+                windows_title=self.action_window_title_var.get(),
+                time_diff=float(self.action_class_time_diff_var.get()) if self.action_class_time_diff_var.get() else 0,
+                action_list_id=action_list_id
+            )
+            session.add(action_detail)
+            
+        elif action_type == "AI":
+            action_detail = ActionAI(
+                training_group=self.action_ai_training_group_var.get(),
+                train_long_name=self.action_ai_record_name_var.get(),
+                long_txt_name=self.action_ai_long_text_name_var.get(),
+                ai_illustration=self.action_ai_illustration_var.get(),
+                ai_note=self.action_ai_note_var.get(),
+                time_diff=float(self.action_ai_time_diff_var.get()) if self.action_ai_time_diff_var.get() else 0,
+                action_list_id=action_list_id
+            )
+            session.add(action_detail)
+            
+        elif action_type == "image":
+            action_detail = ActionPrintscreen(
+                lux=int(self.action_image_left_top_x_var.get()) if self.action_image_left_top_x_var.get() else 0,
+                luy=int(self.action_image_left_top_y_var.get()) if self.action_image_left_top_y_var.get() else 0,
+                rdx=int(self.action_image_right_bottom_x_var.get()) if self.action_image_right_bottom_x_var.get() else 0,
+                rdy=int(self.action_image_right_bottom_y_var.get()) if self.action_image_right_bottom_y_var.get() else 0,
+                pic_name=self.action_image_names_var.get(),
+                match_picture_name=self.action_image_match_criteria_var.get(),
+                match_text="",  # 暂时为空
+                mouse_action=self._get_mouse_action_code(self.image_mouse_action_var.get()),
+                time_diff=float(self.image_time_diff_var.get()) if self.image_time_diff_var.get() else 0,
+                action_list_id=action_list_id
+            )
+            session.add(action_detail)
+            
+        elif action_type == "function":
+            action_detail = ActionFunction(
+                function_name=self.action_function_name_var.get(),
+                args1=self.action_function_parameters_var.get(),
+                args2=self.action_function_arguments_var.get(),
+                args_list="",  # 暂时为空
+                action_list_id=action_list_id
+            )
+            session.add(action_detail)
+    
+    def _update_action_detail(self, session, action_list_id):
+        """更新行为元详细记录"""
+        action_type = self.action_type_var.get()
+        
+        # 先删除旧的详细记录
+        if action_type == "mouse":
+            session.query(ActionMouse).filter_by(id=action_list_id).delete()
+        elif action_type == "keyboard":
+            session.query(ActionKeyboard).filter_by(id=action_list_id).delete()
+        elif action_type == "class":
+            session.query(ActionClass).filter_by(id=action_list_id).delete()
+        elif action_type == "AI":
+            session.query(ActionAI).filter_by(id=action_list_id).delete()
+        elif action_type == "image":
+            session.query(ActionPrintscreen).filter_by(id=action_list_id).delete()
+        elif action_type == "function":
+            session.query(ActionFunction).filter_by(id=action_list_id).delete()
+        
+        # 创建新的详细记录
+        self._save_action_detail(session, action_list_id)
+    
+    def _get_mouse_action_code(self, action_text):
+        """获取鼠标动作编码"""
+        action_map = {
+            "左击": 1, "右击": 2, "左键按下": 4, "右键按下": 6,
+            "左键释放": 5, "右键释放": 7, "滚轮动作": 10
+        }
+        return action_map.get(action_text, 1)
+    
+    def _get_keyboard_type_code(self, type_text):
+        """获取键盘类型编码"""
+        type_map = {
+            "按下": 1, "释放": 2, "单击": 3, "文本": 4
+        }
+        return type_map.get(type_text, 3)
+    
+    def _refresh_action_list(self):
+        """刷新行为列表"""
+        if not self.current_action_group_id:
+            return
+            
+        try:
+            # 清空列表
+            self.action_list.delete(*self.action_list.get_children())
+            
+            # 从数据库获取行为列表
+            from models.actions import ActionList
+            from database.db_manager import DatabaseManager
+            from config.config_manager import ConfigManager
+            
+            config = ConfigManager()
+            db_path = config.get_value('System', 'DataSource')
+            dp_encryption_key = config.get_value('System', 'dbencryptionkey')
+            db_manager = DatabaseManager(db_path, dp_encryption_key)
+            db_manager.initialize()
+            session = db_manager.get_session()
+            
+            # 获取行为列表
+            action_lists = session.query(ActionList).filter_by(group_id=self.current_action_group_id).all()
+            
+            for action in action_lists:
+                self.action_list.insert('', 'end', values=(
+                    action.id,
+                    action.action_type,
+                    action.action_name,
+                    action.next_id
+                ))
+                
+            session.close()
+            
+        except Exception as e:
+            print(f"刷新行为列表失败：{str(e)}")
+    
+    def _update_action_buttons_state(self):
+        """更新行为按钮状态"""
+        # 根据是否有选中项来设置按钮状态
+        selected = self.action_list.selection()
+        has_selection = len(selected) > 0
+        
+        if has_selection and not self.action_operation_type:
+            # 有选中项且不在编辑状态
+            self.btn_modify_action.config(state='normal')
+            self.btn_delete_action.config(state='normal')
+        else:
+            # 无选中项或在编辑状态
+            self.btn_modify_action.config(state='disabled')
+            self.btn_delete_action.config(state='disabled')
+    
+    # 行为操作方法  
+    def _create_action(self):
+        """创建行为元"""
+        return self.action_manager.create_action()
