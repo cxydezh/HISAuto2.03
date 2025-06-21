@@ -1,5 +1,6 @@
 import os
 import sys
+import traceback
 import globalvariable
 # 添加项目根目录到 Python 路径
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -8,8 +9,6 @@ import tkinter as tk
 from config.config_manager import ConfigManager
 from utils.logger import Logger,logger
 from database.db_manager import DatabaseManager
-
-
 
 def initialize_system():
     """初始化系统"""
@@ -126,6 +125,7 @@ def main():
         
     except Exception as e:
         print(f"程序启动失败: {str(e)}")
+        print(traceback.format_exc())
         if hasattr(e, '__cause__') and e.__cause__:
             print(f"原因: {str(e.__cause__)}")
         sys.exit(1)

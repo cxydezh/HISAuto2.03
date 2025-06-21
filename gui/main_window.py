@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 import logging
 import os
 from datetime import datetime
+import traceback
 from config.config_manager import ConfigManager
 from database.db_manager import DatabaseManager
 import globalvariable
@@ -155,6 +156,7 @@ class MainWindow:
             
         except Exception as e:
             print(f"创建标签页失败: {str(e)}")
+            print(traceback.format_exc())
             messagebox.showerror("错误", f"创建界面失败: {str(e)}")
         
     def show(self):
