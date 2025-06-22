@@ -1062,6 +1062,7 @@ class HomeTab(BaseTab):
                     # 清空当前选中的行为组信息
                     self._clear_action_group_info()
                 else:
+                    print(traceback.format_exc())
                     messagebox.showerror("错误", "删除行为组失败")
                     
             except ValueError as e:

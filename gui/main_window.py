@@ -7,7 +7,6 @@ import traceback
 from config.config_manager import ConfigManager
 from database.db_manager import DatabaseManager
 import globalvariable
-
 # 导入各个Tab类
 from gui.tabs.home_tab import HomeTab
 from gui.tabs.debug_tab import DebugTab
@@ -17,7 +16,7 @@ from gui.tabs.aiset_tab import AISetTab
 from gui.tabs.task_control_tab import TaskControlTab
 from gui.tabs.cloud_control_tab import CloudControlTab
 from gui.tabs.setting_tab import SettingTab
-
+    
 class MainWindow:
     def show_time_picker(self, root, entry_widget):
         """显示时间选择器"""

@@ -13,7 +13,7 @@ from pynput import mouse, keyboard
 
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
-from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy, ActionMouse, ActionKeyboard, ActionClass, ActionAI, ActionPrintscreen, ActionFunction
+from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt
 from models.user import User
 from models.department import Department
 from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
@@ -206,6 +206,13 @@ class home_tab_func:
                     session.delete(group)
                     session.commit()
                     logger.info(f"成功删除行为组: {group_name}")
+                    #删除行为组关联的行为元
+                    actions = session.query(ActionList).filter_by(group_id=self.action_group_id).all()
+                    for action in actions:
+                        #删除行为元关联的子行为元
+                        self._delete_action(session,action.id,action.action_type)
+                        session.delete(action)
+                        session.commit()
                     return True
                 else:
                     logger.error(f"无法找到行为组记录: {self.action_group_id}")
@@ -228,6 +235,7 @@ class home_tab_func:
         except Exception as e:
             if session:
                 session.rollback()
+            print(traceback.format_exc())
             logger.error(f"删除行为组失败: {str(e)}")
             return False
         finally:
@@ -248,7 +256,51 @@ class home_tab_func:
     def _capture_image(self):
         """图像采集"""
         messagebox.showinfo("提示", "图像采集功能待实现")
-
+    def _delete_action(self,session,action_list_id,action_type:str):
+        """删除子行为元"""
+        try:
+            mysession = session
+            if not mysession:
+                return False
+        except Exception as e:
+            logger.error(f"删除子行为元失败: {str(e)}")
+            return False
+        if action_type == 'mouse':
+            action = mysession.query(ActionMouse).filter_by(id=action_list_id).first()
+            if action:
+                mysession.delete(action)
+                mysession.commit()
+        elif action_type == 'keyboard': 
+            action = mysession.query(ActionKeyboard).filter_by(id=action_list_id).first()
+            if action:
+                mysession.delete(action)
+                mysession.commit()
+        elif action_type == 'code_text':
+            action = mysession.query(ActionCodeTxt).filter_by(id=action_list_id).first()
+            if action:
+                mysession.delete(action)
+                mysession.commit()
+        elif action_type == 'printscreen':
+            action = mysession.query(ActionPrintscreen).filter_by(id=action_list_id).first()  
+            if action:
+                mysession.delete(action)
+                mysession.commit()
+        elif action_type == 'ai':
+            action = mysession.query(ActionAI).filter_by(id=action_list_id).first()
+            if action:      
+                mysession.delete(action)
+                mysession.commit()
+        elif action_type == 'function':
+            action = mysession.query(ActionFunction).filter_by(id=action_list_id).first()
+            if action:
+                mysession.delete(action)
+                mysession.commit()
+        elif action_type == 'class':
+            action = mysession.query(ActionClass).filter_by(id=action_list_id).first()
+            if action:
+                mysession.delete(action)
+                mysession.commit()    
+        return True
 def _home_capture_image(action_group_id: int, master: tk.Tk):
     """图像采集
     
@@ -953,11 +1005,20 @@ class ActionManager:
             action_type = self.home_tab.action_type_var.get()
             
             if action_type == "mouse":
+                mouse_action = self._text_to_mouse_action(self.home_tab.action_mouse_action_type_var.get())
+                x_var = self.home_tab.action_mouse_x_var.get()  
+                y_var = self.home_tab.action_mouse_y_var.get()
+                x = int(float(x_var)) if x_var.strip() else 0
+                y = int(float(y_var)) if y_var.strip() else 0
+                # 处理鼠标大小字段为空的情况
+                mouse_size_str = self.home_tab.action_mouse_size_var.get()
+                mouse_size = int(float(mouse_size_str)) if mouse_size_str.strip() else 0
+                
                 action_detail = ActionMouse(
-                    mouse_action=self._text_to_mouse_action(self.home_tab.action_mouse_action_type_var.get()),
-                    x=int(float(self.home_tab.action_mouse_x_var.get()) or 0),
-                    y=int(float(self.home_tab.action_mouse_y_var.get()) or 0),
-                    mouse_size=int(float(self.home_tab.action_mouse_size_var.get()) or 0),
+                    mouse_action=mouse_action,
+                    x=x,
+                    y=y,
+                    mouse_size=mouse_size,
                     action_list_id=action_list_id
                 )
                 session.add(action_detail)

@@ -17,12 +17,17 @@ from database.db_manager import DatabaseManager
 from models.actions import ActionList, ActionMouse, ActionKeyboard
 import globalvariable
 
+# 线程安全的GUI操作队列
+# 需在全局作用域定义，便于主线程和ActionRecorder共用
+
+
 class ActionRecorder:
     """行为录制管理器"""
     
     def __init__(self, home_tab):
         """初始化录制管理器"""
         self.home_tab = home_tab
+        self.main_window = home_tab.my_window  # 主窗口对象
         self.recording = False
         self.record_window = None
         self.recorded_events = []
@@ -30,7 +35,7 @@ class ActionRecorder:
         self.record_mode = "全部"
         self.session = None
         self.end_record_keys = None
-        
+    
         # 拖拽相关变量
         self.drag_start_x = 0
         self.drag_start_y = 0
@@ -86,15 +91,15 @@ class ActionRecorder:
             info_label.pack(pady=(0, 15))
             
             # 录制模式选择
-            mode_var = tk.StringVar(value="全部")
+            self.mode_var = tk.StringVar(value="全部")
             
             # 单选按钮框架
             radio_frame = ttk.Frame(main_frame)
             radio_frame.pack(pady=10)
             
-            ttk.Radiobutton(radio_frame, text="单击", variable=mode_var, value="单击").pack(anchor=tk.W, pady=5)
-            ttk.Radiobutton(radio_frame, text="按下弹起", variable=mode_var, value="按下弹起").pack(anchor=tk.W, pady=5)
-            ttk.Radiobutton(radio_frame, text="全部", variable=mode_var, value="全部").pack(anchor=tk.W, pady=5)
+            ttk.Radiobutton(radio_frame, text="单击", variable=self.mode_var, value="单击").pack(anchor=tk.W, pady=5)
+            ttk.Radiobutton(radio_frame, text="按下弹起", variable=self.mode_var, value="按下弹起").pack(anchor=tk.W, pady=5)
+            ttk.Radiobutton(radio_frame, text="全部", variable=self.mode_var, value="全部").pack(anchor=tk.W, pady=5)
             
             # 说明文本
             desc_frame = ttk.Frame(main_frame)
@@ -116,7 +121,7 @@ class ActionRecorder:
             def start_recording():
                 """开始录制"""
                 print("开始录制...")
-                self.record_mode = mode_var.get()
+                self.record_mode = self.mode_var.get()
                 self.record_window.quit()  # 退出事件循环
                 self.record_window.destroy()
                 self.record_window = None
@@ -148,13 +153,16 @@ class ActionRecorder:
             self.record_window.update()
             
             # 确保窗口可见
-            self.record_window.lift()
-            self.record_window.focus_force()
+            if self.record_window is not None:
+                self.record_window.lift()
+            if self.record_window is not None: 
+                self.record_window.focus_force()
             
             print("窗口准备就绪，开始事件循环...")
             
             # 使用独立的事件循环
-            self.record_window.mainloop()
+            if self.record_window is not None: 
+                self.record_window.mainloop()   
             
             print("事件循环结束")
             return True
@@ -328,8 +336,10 @@ class ActionRecorder:
             self.record_window.update()
             
             # 确保窗口可见
-            self.record_window.lift()
-            self.record_window.focus_force()
+            if self.record_window is not None:
+                self.record_window.lift()
+            if self.record_window is not None:
+                self.record_window.focus_force()
             
             print("窗口准备就绪，开始事件循环...")
             
@@ -352,8 +362,6 @@ class ActionRecorder:
         if self.icon_window:
             self.icon_window.destroy()
             self.icon_window = None
-        if self.home_tab and self.home_tab.my_window:
-            self.home_tab.my_window.deiconify()
             
     def start_event_recording(self):
         """开始事件录制"""
@@ -382,7 +390,7 @@ class ActionRecorder:
             self.recording_thread.start()
             
             print("事件录制已启动")
-            
+                        
         except Exception as e:
             print(f"启动事件录制失败: {str(e)}")
             print(traceback.format_exc())
@@ -409,29 +417,26 @@ class ActionRecorder:
     def _recording_worker(self, end_record_key):
         """录制工作线程"""
         try:
-            # 设置录制选项
-            press = self.record_mode in ["按下弹起", "全部"]
-            release = self.record_mode in ["按下弹起", "全部"]
-            click = self.record_mode in ["单击", "全部"]
+            self._start_event_recording(end_record_key)
             
-            # 启动键盘和鼠标监听
+        except Exception as e:
+            print(f"录制工作线程失败: {str(e)}")
+            print(traceback.format_exc())
+            self.stop_recording()
+    
+    def _start_event_recording(self, end_record_key):
+        """开始事件录制
+        
+        Args:
+            end_record_key: 结束录制的快捷键
+        """
+        try:
+            # 设置录制选项
+            self._mouse_hook = self._mouse_event_handler
+            mouse.hook(self._mouse_hook)
             keyboard.on_press(self._on_key_press)
             keyboard.on_release(self._on_key_release)
-            
-            if click:
-                mouse.on_click(self._on_mouse_click)
-            if press:
-                mouse.on_button(self._on_mouse_press, args=('left',))
-                mouse.on_button(self._on_mouse_press, args=('right',))
-                mouse.on_button(self._on_mouse_press, args=('middle',))
-            if release:
-                mouse.on_button(self._on_mouse_release, args=('left',))
-                mouse.on_button(self._on_mouse_release, args=('right',))
-                mouse.on_button(self._on_mouse_release, args=('middle',))
-            
-            # 监听结束录制快捷键
             self._monitor_end_key(end_record_key)
-            
         except Exception as e:
             print(f"录制工作线程失败: {str(e)}")
             print(traceback.format_exc())
@@ -559,107 +564,126 @@ class ActionRecorder:
         self.last_event_time = current_time
         print(f"记录键盘释放事件: {event.name}")
     
-    def _on_mouse_click(self, x, y, button, pressed):
-        """鼠标点击事件处理"""
+    def _mouse_event_handler(self, event):
+        from mouse._mouse_event import ButtonEvent
         if not self.recording:
             return
-        
+        if isinstance(event, ButtonEvent):
+            if  self.record_mode == '全部':
+                if event.event_type == 'down':
+                    self._on_mouse_press(event)
+                    self._on_mouse_click(event)  # 只要down就算click
+                elif event.event_type == 'up':
+                    self._on_mouse_release(event)
+            elif self.record_mode == '单击':
+                if event.event_type == 'down':
+                    self._on_mouse_click(event)
+            elif self.record_mode == '按下弹起':
+                if event.event_type == 'up':
+                    self._on_mouse_press(event)
+                elif event.event_type == 'down':
+                    self._on_mouse_release(event)
+            else:
+                print(f"未知的鼠标模式{self.mode_var}")
+    
+    def _on_mouse_click(self, event):
+        """鼠标点击事件处理
+        Args:
+            event: ButtonEvent
+        """
+        if not self.recording:
+            return
         # 只在按下时记录单击
-        if not pressed:
+        if event.event_type != 'down':
             return
-        
+        x, y = mouse.get_position()
         current_time = time.time()
         time_diff = current_time - self.last_event_time
-        
-        # 鼠标按钮编码
         button_codes = {
-            'left': 1,    # 左键单击
-            'right': 2,   # 右键单击
-            'middle': 3   # 中键单击
+            'left': 1,
+            'right': 2,
+            'middle': 3
         }
-        
         event_data = {
             'type': 'mouse',
-            'action_code': button_codes.get(button, 1),
+            'action_code': button_codes.get(event.button, 1),
             'x': x,
             'y': y,
             'mouse_size': 1,
             'time_diff': time_diff,
             'timestamp': datetime.now()
         }
-        
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录鼠标点击事件: {button} at ({x}, {y})")
-    
-    def _on_mouse_press(self, button):
-        """鼠标按下事件处理"""
+        print(f"记录鼠标点击事件: {event.button} at ({x}, {y})")
+
+    def _on_mouse_press(self, event):
+        """鼠标按下事件处理
+        Args:
+            event: ButtonEvent
+        """
         if not self.recording:
             return
-        
         current_time = time.time()
         time_diff = current_time - self.last_event_time
         x, y = mouse.get_position()
-        
-        # 鼠标按钮编码
         button_codes = {
-            'left': 4,    # 左键按下
-            'right': 6,   # 右键按下
-            'middle': 8   # 中键按下
+            'left': 4,
+            'right': 6,
+            'middle': 8
         }
-        
         event_data = {
             'type': 'mouse',
-            'action_code': button_codes.get(button, 4),
+            'action_code': button_codes.get(event.button, 4),
             'x': x,
             'y': y,
             'mouse_size': 1,
             'time_diff': time_diff,
             'timestamp': datetime.now()
         }
-        
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录鼠标按下事件: {button} at ({x}, {y})")
-    
-    def _on_mouse_release(self, button):
-        """鼠标释放事件处理"""
+        print(f"记录鼠标按下事件: {event.button} at ({x}, {y})")
+
+    def _on_mouse_release(self, event):
+        """鼠标释放事件处理
+        Args:
+            event: ButtonEvent
+        """
         if not self.recording:
             return
-        
         current_time = time.time()
         time_diff = current_time - self.last_event_time
         x, y = mouse.get_position()
-        
-        # 鼠标按钮编码
         button_codes = {
-            'left': 5,    # 左键释放
-            'right': 7,   # 右键释放
-            'middle': 9   # 中键释放
+            'left': 5,
+            'right': 7,
+            'middle': 9
         }
-        
         event_data = {
             'type': 'mouse',
-            'action_code': button_codes.get(button, 5),
+            'action_code': button_codes.get(event.button, 5),
             'x': x,
             'y': y,
             'mouse_size': 1,
             'time_diff': time_diff,
             'timestamp': datetime.now()
         }
-        
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录鼠标释放事件: {button} at ({x}, {y})")
+        print(f"记录鼠标释放事件: {event.button} at ({x}, {y})")
     
     def stop_recording(self):
         """停止录制"""
         try:
             print("停止录制...")
             self.recording = False
-            
-            # 移除键盘和鼠标监听
             keyboard.unhook_all()
+            if hasattr(self, '_mouse_hook'):
+                try:
+                    mouse.unhook(self._mouse_hook)
+                except ValueError:
+                    pass
             mouse.unhook_all()
             
             # 保存录制的事件到数据库
@@ -670,48 +694,62 @@ class ActionRecorder:
             if self.session:
                 self.session.close()
                 self.session = None
-            
             # 关闭图标窗口
             if self.icon_window:
-                self.icon_window.destroy()
-                self.icon_window = None
-            
+                try:
+                    self.icon_window.destroy
+                except Exception as e:
+                    print(f"关闭图标窗口失败: {str(e)}")
             # 恢复主窗口
-            if self.home_tab and self.home_tab.my_window:
-                self.home_tab.my_window.deiconify()
+            if self.main_window or hasattr(self.main_window, 'window'):
+                try:
+                    self.main_window.deiconify()
+                except Exception as e:
+                    print(f"恢复主窗口失败: {str(e)}")
+            # 弹窗提示
+            if self.main_window and hasattr(self.main_window, 'window'):
+                messagebox.showinfo("录制完成", f"录制已完成，共记录 {len(self.recorded_events)} 个事件", parent=self.main_window.window)
+            else:
+                messagebox.showinfo("录制完成", f"录制已完成，共记录 {len(self.recorded_events)} 个事件")
             
             # 刷新动作列表
             if hasattr(self.home_tab, '_refresh_action_list'):
                 self.home_tab._refresh_action_list()
             
-            messagebox.showinfo("录制完成", f"录制已完成，共记录 {len(self.recorded_events)} 个事件")
-            
+            # 保存事件
+            if self.session is not None:
+                self._save_recorded_events()
+            else:
+                print("无数据库会话，跳过事件保存。")
+            # 调用关闭窗口
+            self.record_window.destroy()
+            self.record_window = None
         except Exception as e:
-            print(f"停止录制失败: {str(e)}")
+            print(f"停止录制异常: {str(e)}")
             print(traceback.format_exc())
             messagebox.showerror("错误", f"停止录制失败: {str(e)}")
             if self.home_tab and self.home_tab.my_window:
-                self.home_tab.my_window.deiconify()
+                try:
+                    self.home_tab.my_window.deiconify()
+                except Exception as e:
+                    print(f"恢复主窗口失败: {str(e)}")
     
     def _save_recorded_events(self):
         """保存录制的事件到数据库"""
         try:
-            if not self.recorded_events:
-                return
-            
             print(f"开始保存 {len(self.recorded_events)} 个录制事件...")
-            
-            for i, event in enumerate(self.recorded_events):
+            for event in self.recorded_events:
+                if not isinstance(event, dict):
+                    print(f"跳过无效事件: {event}")
+                    continue
                 # 创建动作列表记录
                 action_list = ActionList(
                     group_id=self.home_tab.action_group_id,
                     action_type=event['type'],
-                    action_name=f"录制事件_{i+1}",
+                    action_name=f"录制事件_{len(self.recorded_events) - self.recorded_events.index(event)}",
                     next_id=None,
                     debug_group_id=None,
                     action_note=f"自动录制的{event['type']}事件",
-                    user_id=globalvariable.USER_ID,
-                    department_id=globalvariable.USER_DEPARTMENT_ID,
                     created_at=event['timestamp']
                 )
                 
@@ -743,8 +781,9 @@ class ActionRecorder:
             print(f"成功保存 {len(self.recorded_events)} 个录制事件到数据库")
             
         except Exception as e:
-            self.session.rollback()
             print(f"保存录制事件失败: {str(e)}")
+            if self.session is not None:
+                self.session.rollback()
             print(traceback.format_exc())
             raise e
 
@@ -762,4 +801,5 @@ def record_action(home_tab):
         print(f"录制行为失败: {str(e)}")
         print(traceback.format_exc())
         messagebox.showerror("错误", f"录制行为失败: {str(e)}")
-        return False 
+        return False
+
