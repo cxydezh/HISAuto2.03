@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import threading
+import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 import pyautogui
@@ -1388,7 +1389,174 @@ class ActionGroupManager:
         except Exception as e:
             print(f"Error getting all action groups: {e}")
             return []
-    
+    def run_action_group(self, group_id):
+        """运行行为组"""
+        self.group_id = group_id
+        session = self._get_session()
+        self.excel_value = None
+        if not session:
+            return False
+        
+        try:
+            group = session.query(ActionGroup).filter_by(id=group_id).first()
+            if not group:
+                return False
+            # 判断行为组中的excel_name、excel_sheet_num、excel_column是否为空
+            if group.excel_name and group.excel_sheet_num and group.excel_column:
+                # 读取excel文件
+                excel_file = group.excel_name
+                excel_sheet_num = group.excel_sheet_num
+                excel_column = group.excel_column
+                # 读取excel文件
+                excel_data = pd.read_excel(excel_file, sheet_name=excel_sheet_num)
+                # 获取excel文件的列
+                excel_column_data = excel_data[excel_column]
+                # 开始执行循环，直到excel_column_data.iloc[0]为空
+                while excel_column_data.iloc[0] is not None:
+                    # 获取excel文件的值
+                    self.excel_value = excel_column_data.iloc[0]
+                    run_action(self.excel_value)
+        except:
+            return False
+        def run_action(excel_value):
+            # 获取行为列表
+            actions = session.query(ActionList).filter_by(group_id=self.group_id).all()  
+            if not actions:
+                return False
+            # 开始运行行为列表，首先根据actions.action_type判断行为类型，然后根据行为类型执行行为
+            if actions.action_type == 'mouse':
+                # 开始执行mouse_action
+                run_mouse_action(actions.id)
+            elif actions.action_type == 'keyboard':
+                # 开始执行keyboard_action
+                run_keyboard_action(actions.id)
+            elif actions.action_type == 'code':
+                # 开始执行code_action
+                run_code_action(actions.id)
+            elif actions.action_type == 'class':
+                # 开始执行class_action
+                run_class_action(actions.id)
+            elif actions.action_type == 'AI':
+                # 开始执行AI_action
+                run_AI_action(actions.id)
+            elif actions.action_type == 'image':
+                # 开始执行image_action
+                run_image_action(actions.id)
+            elif actions.action_type == 'function':
+                # 开始执行function_action
+                run_function_action(actions.id)
+            else:
+                return False
+        def run_mouse_action(action_id):
+            # 获取鼠标行为列表
+            mouse_action = session.query(ActionMouse).filter_by(id=action_id).first()
+            if not mouse_action:
+                return False
+            time.sleep(mouse_action.time_diff)
+            # 鼠标动作(1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
+            # 开始执行mouse_action
+            if mouse_action.mouse_action == 1:
+                # 开始执行click_action
+                pyautogui.click(mouse_action.x,mouse_action.y)
+                return True
+            elif mouse_action.mouse_action == 2:
+                # 开始执行右击
+                pyautogui.rightClick(mouse_action.x,mouse_action.y)
+                return True
+            elif mouse_action.mouse_action == 3:
+                # 开始执行左键按下
+                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='left')
+                return True
+            elif mouse_action.mouse_action == 4:
+                # 开始执行右键按下
+                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='right')
+                return True
+            elif mouse_action.mouse_action == 5:
+                # 开始执行左键释放
+                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='left')
+                return True
+            elif mouse_action.mouse_action == 6:
+                # 开始执行右键释放
+                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='right')
+                return True
+            elif mouse_action.mouse_action == 7:
+                # 开始执行滚轮动作
+                pyautogui.scroll(mouse_action.mouse_size)
+                return True
+            else:
+                return False
+        def run_keyboard_action(action_id):
+            # 获取键盘行为列表
+            keyboard_action = session.query(ActionKeyboard).filter_by(id=action_id).first()
+            if not keyboard_action:
+                return False
+            time.sleep(keyboard_action.time_diff)
+            # 键盘类型(1:按下,2:释放,3:单击,4:文本)
+            if keyboard_action.keyboard_type == 1:
+                # 开始执行按下
+                pyautogui.keyDown(keyboard_action.keyboard_value)
+                return True
+            elif keyboard_action.keyboard_type == 2:
+                # 开始执行释放
+                pyautogui.keyUp(keyboard_action.keyboard_value)
+            elif keyboard_action.keyboard_type == 3:
+                # 开始执行单击
+                pyautogui.click(keyboard_action.keyboard_value)
+                return True
+            elif keyboard_action.keyboard_type == 4:
+                # 开始执行文本
+                return keyboard_action.keyboard_value
+            else:
+                return False
+        def run_class_action(action_id):
+            # 获取类行为列表
+            class_action = session.query(ActionClass).filter_by(id=action_id).first()
+            if not class_action:
+                return False
+            time.sleep(class_action.time_diff)
+            # 待完善
+            return False
+        def run_AI_action(action_id):
+            # 获取AI行为列表
+            AI_action = session.query(ActionAI).filter_by(id=action_id).first()
+            if not AI_action:
+                return False
+            time.sleep(AI_action.time_diff)
+            # 待完善
+            return False
+        def run_image_action(action_id):
+            # 获取图像行为列表
+            image_action = session.query(ActionPrintscreen).filter_by(id=action_id).first()
+            if not image_action:
+                return False
+            time.sleep(image_action.time_diff)
+            # 开始执行截屏
+            pyautogui.screenshot(image_action.pic_name,region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
+            # 如果image_action.match_picture_name不为空，则开始执行匹配图片
+            if image_action.match_picture_name:
+                # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
+                config = ConfigManager()
+                local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
+                # 开始执行匹配图片
+                pyautogui.locateOnScreen(local_picture_path)
+                # 如果匹配到，则开始执行鼠标动作
+                if pyautogui.locateOnScreen(local_picture_path):
+                    # 开始执行鼠标动作
+                    pyautogui.click(pyautogui.locateCenterOnScreen(local_picture_path))
+                    return True
+                else:
+                    return False
+            # 如果image_action.match_text不为空，则开始执行匹配文本
+            if image_action.match_text:
+                    # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
+                    config = ConfigManager()
+                    local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
+                # 开始执行匹配文本
+                pyautogui.locateOnScreen(local_picture_path)
+                return True
+            return True
+        def run_code_action(action_id):
+            # 获取代码行为列表
     def build_tree_structure(self, hierarchies):
         """构建树形结构数据"""
         tree_dict = {}
