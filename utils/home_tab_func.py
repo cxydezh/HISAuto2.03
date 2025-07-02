@@ -1531,32 +1531,129 @@ class ActionGroupManager:
                 return False
             time.sleep(image_action.time_diff)
             # 开始执行截屏
-            pyautogui.screenshot(image_action.pic_name,region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
+            get_picture = pyautogui.screenshot(image_action.pic_name,region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
             # 如果image_action.match_picture_name不为空，则开始执行匹配图片
             if image_action.match_picture_name:
                 # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
                 config = ConfigManager()
                 local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
-                # 开始执行匹配图片
-                pyautogui.locateOnScreen(local_picture_path)
-                # 如果匹配到，则开始执行鼠标动作
-                if pyautogui.locateOnScreen(local_picture_path):
-                    # 开始执行鼠标动作
-                    pyautogui.click(pyautogui.locateCenterOnScreen(local_picture_path))
+                # 开始执行截图与本地图片匹配，如果匹配到，则开始执行鼠标动作
+                try:
+                    # 检查本地图片是否存在
+                    if not os.path.exists(local_picture_path):
+                        logger.error(f"本地匹配图片不存在: {local_picture_path}")
+                        return False
+                    
+                    # 保存当前截图到临时文件用于匹配
+                    temp_screenshot_path = os.path.join(os.path.dirname(local_picture_path), f"temp_screenshot_{int(time.time())}.png")
+                    get_picture.save(temp_screenshot_path)
+                    
+                    logger.info(f"开始匹配图片: {image_action.match_picture_name}")
+                    # 设置匹配置信度阈值
+                    confidence = 0.8  # 可以根据需要调整匹配精度
+                    
+                    # 使用OpenCV进行更精确的图像匹配
+                    import cv2
+                    import numpy as np
+                    
+                    # 读取图像
+                    template = cv2.imread(local_picture_path)
+                    screenshot = cv2.imread(temp_screenshot_path)
+                    
+                    # 清理临时文件
+                    try:
+                        os.remove(temp_screenshot_path)
+                    except:
+                        pass
+                    
+                    # 检查图像是否正确加载
+                    if template is None or screenshot is None:
+                        logger.error("无法加载图像进行匹配")
+                        return False
+                    # 开始执行匹配操作，如果匹配到，则开始执行鼠标动作
+                    # 使用OpenCV进行图像匹配
+                    result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
+                    # 获取匹配结果
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+                    # 设置匹配阈值
+                    threshold = 0.8
+                    # 如果匹配度大于阈值，则开始执行鼠标动作
+                    if max_val >= threshold:
+                        # 获取匹配位置
+                        top_left = max_loc
+                        bottom_right = (top_left[0] + template.shape[1], top_left[1] + template.shape[0])
+                        # 计算匹配区域中心
+                        center_x = (top_left[0] + bottom_right[0]) // 2
+                        center_y = (top_left[1] + bottom_right[1]) // 2
+                        location = (center_x, center_y)
+                        logger.info(f"匹配成功，位置: {location}")
+                        return False
+                except Exception as e:
+                    logger.error(f"图像匹配失败: {e}")
+                # 开始根据image_action.mouse_action的内容执行鼠标动作（鼠标动作(0:无,1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
+                if image_action.mouse_action == 1:
+                    pyautogui.click(location)
+                    return True
+                elif image_action.mouse_action == 2:
+                    pyautogui.rightClick(location)
+                    return True
+                elif image_action.mouse_action == 3:
+                    pyautogui.mouseDown(location,button='left')
+                    return True
+                elif image_action.mouse_action == 4:
+                    pyautogui.mouseDown(location,button='right')
+                    return True
+                elif image_action.mouse_action == 5:
+                    pyautogui.mouseUp(location,button='left')
+                    return True
+                elif image_action.mouse_action == 6:
+                    pyautogui.mouseUp(location,button='right')
+                    return True
+                elif image_action.mouse_action == 7:
+                    pyautogui.scroll(location,image_action.mouse_size)
                     return True
                 else:
                     return False
+            else:
+                return False
             # 如果image_action.match_text不为空，则开始执行匹配文本
             if image_action.match_text:
-                    # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
-                    config = ConfigManager()
-                    local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
                 # 开始执行匹配文本
-                pyautogui.locateOnScreen(local_picture_path)
-                return True
+                import easyocr
+                reader = easyocr.Reader(['chinese_simp', 'english'])
+                result = reader.readtext(get_picture)
+                if result:
+                    for item in result:
+                        if item[1] == image_action.match_text:
+                            # 返回找到的文本区域坐标
+                            # item[0]包含文本的四个角坐标点
+                            bbox = item[0]
+                            # 计算文本区域的左上角和右下角坐标
+                            x_min = min(point[0] for point in bbox)
+                            y_min = min(point[1] for point in bbox)
+                            x_max = max(point[0] for point in bbox)
+                            y_max = max(point[1] for point in bbox)
+                            return (x_min, y_min, x_max, y_max)
+                return False
             return True
         def run_code_action(action_id):
             # 获取代码行为列表
+            code_action = session.query(ActionCodeTxt).filter_by(id=action_id).first()
+            if not code_action:
+                return False
+            time.sleep(code_action.time_diff)
+            # 执行代码文本
+            # 这里可以添加代码执行逻辑
+            return True
+        def run_function_action(action_id):
+            # 获取函数行为列表
+            function_action = session.query(ActionFunction).filter_by(id=action_id).first()
+            if not function_action:
+                return False
+            time.sleep(function_action.time_diff)
+            # 执行函数
+            # 这里可以添加函数执行逻辑
+            return True
     def build_tree_structure(self, hierarchies):
         """构建树形结构数据"""
         tree_dict = {}
