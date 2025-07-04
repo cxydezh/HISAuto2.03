@@ -1412,47 +1412,101 @@ class ActionGroupManager:
                 # 获取excel文件的列
                 excel_column_data = excel_data[excel_column]
                 # 开始执行循环，直到excel_column_data.iloc[0]为空
-                while excel_column_data.iloc[0] is not None:
+                excel_loop_result = True
+                while excel_column_data.iloc[0] is not None and excel_loop_result:
                     # 获取excel文件的值
                     self.excel_value = excel_column_data.iloc[0]
-                    run_action(self.excel_value)
-        except:
+                    excel_loop_result = self.run_action(self.excel_value)
+                    if excel_loop_result:
+                        # 如果excel_loop_result为True，则在excel_column的下一列中输入"OK"
+                        excel_column_data.iloc[1] = "OK"
+                        continue
+                    else:
+                        # 如果excel_loop_result为False，则在excel_column的下一列中输入"NG"
+                        excel_column_data.iloc[1] = "NG"
+                        continue
+            else:
+                ls_result = self.run_action(self.group_id)
+                if ls_result:
+                    return True
+                else:
+                    return False
+        except Exception as e:
+            self._close_session()
+            print(f"Error running action group: {e}")
+            print(traceback.format_exc())
             return False
-        def run_action(excel_value):
+
+    def run_action(self, excel_value):
+        """执行行为列表"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取行为列表
             actions = session.query(ActionList).filter_by(group_id=self.group_id).all()  
             if not actions:
                 return False
-            # 开始运行行为列表，首先根据actions.action_type判断行为类型，然后根据行为类型执行行为
-            if actions.action_type == 'mouse':
-                # 开始执行mouse_action
-                run_mouse_action(actions.id)
-            elif actions.action_type == 'keyboard':
-                # 开始执行keyboard_action
-                run_keyboard_action(actions.id)
-            elif actions.action_type == 'code':
-                # 开始执行code_action
-                run_code_action(actions.id)
-            elif actions.action_type == 'class':
-                # 开始执行class_action
-                run_class_action(actions.id)
-            elif actions.action_type == 'AI':
-                # 开始执行AI_action
-                run_AI_action(actions.id)
-            elif actions.action_type == 'image':
-                # 开始执行image_action
-                run_image_action(actions.id)
-            elif actions.action_type == 'function':
-                # 开始执行function_action
-                run_function_action(actions.id)
-            else:
-                return False
-        def run_mouse_action(action_id):
+            action_loop_result = True
+            #开始执行actions中的action,如果action.next_action_id为空，则下一个action按照顺序执行；如果action.next_action_id不为空，则跳转到next_action_id的action执行。
+            # 创建一个索引来跟踪当前执行的action
+            current_index = 0
+            while current_index < len(actions):
+                action = actions[current_index]
+                
+                # 根据action_type执行相应的操作
+                if action.action_type == 'mouse':
+                    action_loop_result = self.run_mouse_action(action.id)
+                elif action.action_type == 'keyboard':
+                    action_loop_result = self.run_keyboard_action(action.id)
+                elif action.action_type == 'code':
+                    action_loop_result = self.run_code_action(action.id)
+                elif action.action_type == 'class':
+                    action_loop_result = self.run_class_action(action.id)
+                elif action.action_type == 'AI':
+                    action_loop_result = self.run_AI_action(action.id)
+                elif action.action_type == 'image':
+                    action_loop_result = self.run_image_action(action.id)
+                elif action.action_type == 'function':
+                    action_loop_result = self.run_function_action(action.id)
+                else:
+                    return False
+                
+                # 检查执行结果
+                if not action_loop_result:
+                    return False
+                
+                # 处理下一个action
+                if action.next_id or action.next_id != None:
+                    # 如果有指定的下一个action_id，查找对应的action
+                    next_action = session.query(ActionList).filter_by(id=action.next_id).first()
+                    if not next_action:
+                        return False
+                    current_index = action.next_id
+                else:
+                    # 如果没有指定next_action_id，则按顺序执行下一个
+                    current_index += 1
+            
+            return True
+        except Exception as e:
+            print(f"Error in run_action: {e}")
+            return False
+
+    def run_mouse_action(self, action_id):
+        """执行鼠标动作"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取鼠标行为列表
             mouse_action = session.query(ActionMouse).filter_by(id=action_id).first()
             if not mouse_action:
                 return False
-            time.sleep(mouse_action.time_diff)
+            #如果mouse_action.time_diff为空，则不等待
+            if mouse_action.time_diff:
+                time.sleep(mouse_action.time_diff)
             # 鼠标动作(1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
             # 开始执行mouse_action
             if mouse_action.mouse_action == 1:
@@ -1485,12 +1539,25 @@ class ActionGroupManager:
                 return True
             else:
                 return False
-        def run_keyboard_action(action_id):
+        except Exception as e:
+            print(f"Error in run_mouse_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_keyboard_action(self, action_id):
+        """执行键盘动作"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取键盘行为列表
             keyboard_action = session.query(ActionKeyboard).filter_by(id=action_id).first()
             if not keyboard_action:
                 return False
-            time.sleep(keyboard_action.time_diff)
+            #如果keyboard_action.time_diff为空，则不等待
+            if keyboard_action.time_diff:
+                time.sleep(keyboard_action.time_diff)
             # 键盘类型(1:按下,2:释放,3:单击,4:文本)
             if keyboard_action.keyboard_type == 1:
                 # 开始执行按下
@@ -1499,6 +1566,7 @@ class ActionGroupManager:
             elif keyboard_action.keyboard_type == 2:
                 # 开始执行释放
                 pyautogui.keyUp(keyboard_action.keyboard_value)
+                return True
             elif keyboard_action.keyboard_type == 3:
                 # 开始执行单击
                 pyautogui.click(keyboard_action.keyboard_value)
@@ -1508,28 +1576,66 @@ class ActionGroupManager:
                 return keyboard_action.keyboard_value
             else:
                 return False
-        def run_class_action(action_id):
+        except Exception as e:
+            print(f"Error in run_keyboard_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_class_action(self, action_id):
+        """执行类动作"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取类行为列表
             class_action = session.query(ActionClass).filter_by(id=action_id).first()
             if not class_action:
                 return False
-            time.sleep(class_action.time_diff)
+            #如果class_action.time_diff为空，则不等待
+            if class_action.time_diff:
+                time.sleep(class_action.time_diff)
             # 待完善
             return False
-        def run_AI_action(action_id):
+        except Exception as e:
+            print(f"Error in run_class_action: {e}")
+            return False
+
+    def run_AI_action(self, action_id):
+        """执行AI动作"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取AI行为列表
             AI_action = session.query(ActionAI).filter_by(id=action_id).first()
             if not AI_action:
                 return False
-            time.sleep(AI_action.time_diff)
+            #如果AI_action.time_diff为空，则不等待
+            if AI_action.time_diff:
+                time.sleep(AI_action.time_diff)
             # 待完善
             return False
-        def run_image_action(action_id):
+        except Exception as e:
+            print(f"Error in run_AI_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_image_action(self, action_id):
+        """执行图像动作"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取图像行为列表
             image_action = session.query(ActionPrintscreen).filter_by(id=action_id).first()
             if not image_action:
                 return False
-            time.sleep(image_action.time_diff)
+            #如果image_action.time_diff为空，则不等待
+            if image_action.time_diff:
+                time.sleep(image_action.time_diff)
             # 开始执行截屏
             get_picture = pyautogui.screenshot(image_action.pic_name,region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
             # 如果image_action.match_picture_name不为空，则开始执行匹配图片
@@ -1566,94 +1672,132 @@ class ActionGroupManager:
                     except:
                         pass
                     
-                    # 检查图像是否正确加载
                     if template is None or screenshot is None:
-                        logger.error("无法加载图像进行匹配")
+                        logger.error("无法读取图像文件")
                         return False
-                    # 开始执行匹配操作，如果匹配到，则开始执行鼠标动作
-                    # 使用OpenCV进行图像匹配
+                    
+                    # 执行模板匹配
                     result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
-                    # 获取匹配结果
                     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                     # 设置匹配阈值
-                    threshold = 0.8
-                    # 如果匹配度大于阈值，则开始执行鼠标动作
-                    if max_val >= threshold:
-                        # 获取匹配位置
-                        top_left = max_loc
-                        bottom_right = (top_left[0] + template.shape[1], top_left[1] + template.shape[0])
-                        # 计算匹配区域中心
-                        center_x = (top_left[0] + bottom_right[0]) // 2
-                        center_y = (top_left[1] + bottom_right[1]) // 2
-                        location = (center_x, center_y)
-                        logger.info(f"匹配成功，位置: {location}")
+                    if max_val >= confidence:
+                        logger.info(f"图片匹配成功，相似度: {max_val:.2f}")
+                        # 根据鼠标动作类型执行相应操作
+                        if image_action.mouse_action == 0:
+                            # 无动作
+                            return True
+                        elif image_action.mouse_action == 1:
+                            # 左击
+                            pyautogui.click(pyautogui.locateCenterOnScreen(local_picture_path))
+                            return True
+                        elif image_action.mouse_action == 2:
+                            # 右击
+                            pyautogui.rightClick(pyautogui.locateCenterOnScreen(local_picture_path))
+                            return True
+                        elif image_action.mouse_action == 3:
+                            # 左键按下
+                            pyautogui.mouseDown(pyautogui.locateCenterOnScreen(local_picture_path),button='left')
+                            return True
+                        elif image_action.mouse_action == 4:
+                            # 右键按下
+                            pyautogui.mouseDown(pyautogui.locateCenterOnScreen(local_picture_path),button='right')
+                            return True
+                        elif image_action.mouse_action == 5:
+                            # 左键释放
+                            pyautogui.mouseUp(pyautogui.locateCenterOnScreen(local_picture_path),button='left')
+                            return True
+                        elif image_action.mouse_action == 6:
+                            # 右键释放
+                            pyautogui.mouseUp(pyautogui.locateCenterOnScreen(local_picture_path),button='right')
+                            return True
+                        elif image_action.mouse_action == 7:
+                            # 滚轮动作
+                            pyautogui.scroll(image_action.mouse_size)
+                            return True
+                        else:
+                            return True
+                    else:
+                        logger.warning(f"图片匹配失败，相似度: {max_val:.2f}")
                         return False
+                        
                 except Exception as e:
                     logger.error(f"图像匹配失败: {e}")
-                # 开始根据image_action.mouse_action的内容执行鼠标动作（鼠标动作(0:无,1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
-                if image_action.mouse_action == 1:
-                    pyautogui.click(location)
-                    return True
-                elif image_action.mouse_action == 2:
-                    pyautogui.rightClick(location)
-                    return True
-                elif image_action.mouse_action == 3:
-                    pyautogui.mouseDown(location,button='left')
-                    return True
-                elif image_action.mouse_action == 4:
-                    pyautogui.mouseDown(location,button='right')
-                    return True
-                elif image_action.mouse_action == 5:
-                    pyautogui.mouseUp(location,button='left')
-                    return True
-                elif image_action.mouse_action == 6:
-                    pyautogui.mouseUp(location,button='right')
-                    return True
-                elif image_action.mouse_action == 7:
-                    pyautogui.scroll(location,image_action.mouse_size)
-                    return True
-                else:
                     return False
-            else:
-                return False
             # 如果image_action.match_text不为空，则开始执行匹配文本
             if image_action.match_text:
+                # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
+                config = ConfigManager()
+                local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
                 # 开始执行匹配文本
-                import easyocr
-                reader = easyocr.Reader(['chinese_simp', 'english'])
-                result = reader.readtext(get_picture)
-                if result:
-                    for item in result:
-                        if item[1] == image_action.match_text:
-                            # 返回找到的文本区域坐标
-                            # item[0]包含文本的四个角坐标点
-                            bbox = item[0]
-                            # 计算文本区域的左上角和右下角坐标
-                            x_min = min(point[0] for point in bbox)
-                            y_min = min(point[1] for point in bbox)
-                            x_max = max(point[0] for point in bbox)
-                            y_max = max(point[1] for point in bbox)
-                            return (x_min, y_min, x_max, y_max)
-                return False
+                try:
+                    import easyocr
+                    reader = easyocr.Reader(['chinese_simp', 'english'])
+                    result = reader.readtext(get_picture)
+                    
+                    if result:
+                        for item in result:
+                            if item[1] == image_action.match_text:
+                                # 计算文本区域坐标
+                                bbox = item[0]
+                                x_min = min(point[0] for point in bbox)
+                                y_min = min(point[1] for point in bbox)
+                                x_max = max(point[0] for point in bbox)
+                                y_max = max(point[1] for point in bbox)
+                                return (x_min, y_min, x_max, y_max)
+                    return False
+                except Exception as e:
+                    logger.error(f"文本识别失败: {e}")
+                    return False
             return True
-        def run_code_action(action_id):
+        except Exception as e:
+            print(f"Error in run_image_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_code_action(self, action_id):
+        """执行代码动作"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取代码行为列表
             code_action = session.query(ActionCodeTxt).filter_by(id=action_id).first()
             if not code_action:
                 return False
-            time.sleep(code_action.time_diff)
+            #如果code_action.time_diff为空，则不等待
+            if code_action.time_diff:
+                time.sleep(code_action.time_diff)
             # 执行代码文本
             # 这里可以添加代码执行逻辑
             return True
-        def run_function_action(action_id):
+        except Exception as e:
+            print(f"Error in run_code_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_function_action(self, action_id):
+        """执行函数动作"""
+        session = self._get_session()
+        if not session:
+            return False
+            
+        try:
             # 获取函数行为列表
             function_action = session.query(ActionFunction).filter_by(id=action_id).first()
             if not function_action:
                 return False
-            time.sleep(function_action.time_diff)
+            #如果function_action.time_diff为空，则不等待
+            if function_action.time_diff:
+                time.sleep(function_action.time_diff)
             # 执行函数
             # 这里可以添加函数执行逻辑
             return True
+        except Exception as e:
+            print(f"Error in run_function_action: {e}")
+            print(traceback.format_exc())
+            return False
+
     def build_tree_structure(self, hierarchies):
         """构建树形结构数据"""
         tree_dict = {}

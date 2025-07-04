@@ -1107,7 +1107,8 @@ class HomeTab(BaseTab):
     @prevent_double_click(interval=1.0)
     def _run_action_group(self):
         """运行行为组"""
-        messagebox.showinfo("提示", "运行行为组功能待实现")
+        action_group_manager = ActionGroupManager(self)
+        action_group_manager.run_action_group(self.action_group_id)
     
     # =============================================================================
     # 中间面板相关方法（行为类型切换 -> 控件创建 -> 行为列表 -> 行为操作）
