@@ -26,8 +26,8 @@ from core.pic_capture import PicCapture
 # 移除循环导入
 # from gui.tabs.Hierarchyutils import iid_to_group_rank
 
-class home_tab_func:
-    """用于支持home_tab.py中相关方法的实现"""
+class home_tab_action_group_func:
+    """用于支持home_tab.py中与行为组相关的相关方法的实现"""
     
     def __init__(self, group_name: str, group_desc: str, group_user_id: str,
                   group_department_id: str,is_auto: bool, auto_time: str, 
@@ -464,26 +464,6 @@ def _home_delete_action_group(action_group_id:int):
     except Exception as e:
         logger.error(f"删除行为组失败: {str(e)}")
         messagebox.showerror("错误", f"删除行为组失败: {str(e)}")
-        return False
-
-def _home_save_action_group(action_group_id:int):
-    """保存行为组
-    
-    Args:
-        action_group_id: 行为组ID
-        
-    Returns:
-        bool: 操作是否成功
-    """
-    try:
-        # 这里应该实现保存行为组的具体逻辑
-        # 需要根据action_group_id获取行为组信息并保存
-        
-        messagebox.showinfo("提示", "保存行为组功能待实现")
-        return True
-    except Exception as e:
-        logger.error(f"保存行为组失败: {str(e)}")
-        messagebox.showerror("错误", f"保存行为组失败: {str(e)}")
         return False
     
 class ActionManager:
@@ -1082,7 +1062,6 @@ class ActionManager:
             print(traceback.format_exc())
             self.logger.error(f"保存行为详情失败: {str(e)}")
             return False
-    
     def _update_action_detail(self, session, action_list_id):
         """更新行为元详细记录"""
         try:
@@ -1090,7 +1069,7 @@ class ActionManager:
             
             # 查找并更新现有的详细记录
             if action_type == "mouse":
-                action_detail = session.query(ActionMouse).filter_by(id=action_list_id).first()
+                action_detail = session.query(ActionMouse).filter_by(action_list_id=action_list_id).first()
                 if action_detail:
                     action_detail.mouse_action = self._text_to_mouse_action(self.home_tab.action_mouse_action_type_var.get())
                     action_detail.x = int(float(self.home_tab.action_mouse_x_var.get()) or 0)
@@ -1101,7 +1080,7 @@ class ActionManager:
                     return self._save_action_detail(session, action_list_id)
                     
             elif action_type == "keyboard":
-                action_detail = session.query(ActionKeyboard).filter_by(id=action_list_id).first()
+                action_detail = session.query(ActionKeyboard).filter_by(action_list_id=action_list_id).first()
                 if action_detail:
                     action_detail.keyboard_type = self._text_to_keyboard_type(self.home_tab.action_keyboard_type_var.get())
                     action_detail.keyboard_value = self.home_tab.action_keyboard_value_var.get()
@@ -1110,7 +1089,7 @@ class ActionManager:
                     return self._save_action_detail(session, action_list_id)
                     
             elif action_type == "class":
-                action_detail = session.query(ActionClass).filter_by(id=action_list_id).first()
+                action_detail = session.query(ActionClass).filter_by(action_list_id=action_list_id).first()
                 if action_detail:
                     action_detail.class_name = self.home_tab.class_name_var.get()
                     action_detail.windows_title = self.home_tab.window_title_var.get()
@@ -1119,7 +1098,7 @@ class ActionManager:
                     return self._save_action_detail(session, action_list_id)
                     
             elif action_type == "AI":
-                action_detail = session.query(ActionAI).filter_by(id=action_list_id).first()
+                action_detail = session.query(ActionAI).filter_by(action_list_id=action_list_id).first()
                 if action_detail:
                     action_detail.train_group_name = self.home_tab.ai_train_group_var.get()
                     action_detail.train_long_name = self.home_tab.ai_train_long_name_var.get()
@@ -1131,7 +1110,7 @@ class ActionManager:
                     return self._save_action_detail(session, action_list_id)
                     
             elif action_type == "image":
-                action_detail = session.query(ActionPrintscreen).filter_by(id=action_list_id).first()
+                action_detail = session.query(ActionPrintscreen).filter_by(action_list_id=action_list_id).first()
                 if action_detail:
                     action_detail.lux = int(self.home_tab.action_image_left_top_x_var.get() or 0)
                     action_detail.luy = int(self.home_tab.action_image_left_top_y_var.get() or 0)
@@ -1146,7 +1125,7 @@ class ActionManager:
                     return self._save_action_detail(session, action_list_id)
                     
             elif action_type == "function":
-                action_detail = session.query(ActionFunction).filter_by(id=action_list_id).first()
+                action_detail = session.query(ActionFunction).filter_by(action_list_id=action_list_id).first()
                 if action_detail:
                     action_detail.function_name = self.home_tab.function_name_var.get()
                     action_detail.args1 = self.home_tab.function_args1_var.get()
@@ -1162,7 +1141,7 @@ class ActionManager:
         except Exception as e:
             self.logger.error(f"更新行为详情失败: {str(e)}")
             return False
-    
+      
     def _text_to_mouse_action(self, text):
         """将鼠标动作文本转换为数字编码"""
         mouse_action_map = {
@@ -1427,10 +1406,10 @@ class ActionGroupManager:
                         continue
             else:
                 ls_result = self.run_action(self.group_id)
-                if ls_result:
-                    return True
-                else:
+                if not ls_result:
                     return False
+            #弹窗提示任务完成
+            return True
         except Exception as e:
             self._close_session()
             print(f"Error running action group: {e}")
@@ -1458,18 +1437,25 @@ class ActionGroupManager:
                 # 根据action_type执行相应的操作
                 if action.action_type == 'mouse':
                     action_loop_result = self.run_mouse_action(action.id)
+                    logger.info(f"{action.action_name}:鼠标动作执行结果: {action_loop_result}")
                 elif action.action_type == 'keyboard':
                     action_loop_result = self.run_keyboard_action(action.id)
+                    logger.info(f"{action.action_name}:键盘动作执行结果: {action_loop_result}")
                 elif action.action_type == 'code':
                     action_loop_result = self.run_code_action(action.id)
+                    logger.info(f"{action.action_name}:代码动作执行结果: {action_loop_result}")
                 elif action.action_type == 'class':
                     action_loop_result = self.run_class_action(action.id)
+                    logger.info(f"{action.action_name}:类动作执行结果: {action_loop_result}")
                 elif action.action_type == 'AI':
                     action_loop_result = self.run_AI_action(action.id)
+                    logger.info(f"{action.action_name}:AI动作执行结果: {action_loop_result}")
                 elif action.action_type == 'image':
                     action_loop_result = self.run_image_action(action.id)
+                    logger.info(f"{action.action_name}:图像动作执行结果: {action_loop_result}")
                 elif action.action_type == 'function':
                     action_loop_result = self.run_function_action(action.id)
+                    logger.info(f"{action.action_name}:函数动作执行结果: {action_loop_result}")
                 else:
                     return False
                 
@@ -1478,7 +1464,7 @@ class ActionGroupManager:
                     return False
                 
                 # 处理下一个action
-                if action.next_id or action.next_id != None:
+                if action.next_id and action.next_id != 'None':
                     # 如果有指定的下一个action_id，查找对应的action
                     next_action = session.query(ActionList).filter_by(id=action.next_id).first()
                     if not next_action:
@@ -1501,8 +1487,9 @@ class ActionGroupManager:
             
         try:
             # 获取鼠标行为列表
-            mouse_action = session.query(ActionMouse).filter_by(id=action_id).first()
+            mouse_action = session.query(ActionMouse).filter_by(action_list_id=action_id).first()
             if not mouse_action:
+                logger.error(f"鼠标动作列表不存在: {action_id}")
                 return False
             #如果mouse_action.time_diff为空，则不等待
             if mouse_action.time_diff:
@@ -1552,8 +1539,9 @@ class ActionGroupManager:
             
         try:
             # 获取键盘行为列表
-            keyboard_action = session.query(ActionKeyboard).filter_by(id=action_id).first()
+            keyboard_action = session.query(ActionKeyboard).filter_by(action_list_id=action_id).first()
             if not keyboard_action:
+                logger.error(f"键盘动作列表不存在: {action_id}")
                 return False
             #如果keyboard_action.time_diff为空，则不等待
             if keyboard_action.time_diff:
@@ -1569,11 +1557,12 @@ class ActionGroupManager:
                 return True
             elif keyboard_action.keyboard_type == 3:
                 # 开始执行单击
-                pyautogui.click(keyboard_action.keyboard_value)
+                pyautogui.press(keyboard_action.keyboard_value)
                 return True
             elif keyboard_action.keyboard_type == 4:
                 # 开始执行文本
-                return keyboard_action.keyboard_value
+                pyautogui.write(keyboard_action.keyboard_value)
+                return True
             else:
                 return False
         except Exception as e:
@@ -1589,8 +1578,9 @@ class ActionGroupManager:
             
         try:
             # 获取类行为列表
-            class_action = session.query(ActionClass).filter_by(id=action_id).first()
+            class_action = session.query(ActionClass).filter_by(action_list_id=action_id).first()
             if not class_action:
+                logger.error(f"类动作列表不存在: {action_id}")
                 return False
             #如果class_action.time_diff为空，则不等待
             if class_action.time_diff:
@@ -1609,8 +1599,9 @@ class ActionGroupManager:
             
         try:
             # 获取AI行为列表
-            AI_action = session.query(ActionAI).filter_by(id=action_id).first()
+            AI_action = session.query(ActionAI).filter_by(action_list_id=action_id).first()
             if not AI_action:
+                logger.error(f"AI动作列表不存在: {action_id}")
                 return False
             #如果AI_action.time_diff为空，则不等待
             if AI_action.time_diff:
@@ -1630,14 +1621,15 @@ class ActionGroupManager:
             
         try:
             # 获取图像行为列表
-            image_action = session.query(ActionPrintscreen).filter_by(id=action_id).first()
+            image_action = session.query(ActionPrintscreen).filter_by(action_list_id=action_id).first()
             if not image_action:
+                logger.error(f"图像动作列表不存在: {action_id}")
                 return False
             #如果image_action.time_diff为空，则不等待
             if image_action.time_diff:
                 time.sleep(image_action.time_diff)
             # 开始执行截屏
-            get_picture = pyautogui.screenshot(image_action.pic_name,region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
+            get_picture = pyautogui.screenshot(region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
             # 如果image_action.match_picture_name不为空，则开始执行匹配图片
             if image_action.match_picture_name:
                 # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
@@ -1762,8 +1754,9 @@ class ActionGroupManager:
             
         try:
             # 获取代码行为列表
-            code_action = session.query(ActionCodeTxt).filter_by(id=action_id).first()
+            code_action = session.query(ActionCodeTxt).filter_by(action_list_id=action_id).first()
             if not code_action:
+                logger.error(f"代码动作列表不存在: {action_id}")
                 return False
             #如果code_action.time_diff为空，则不等待
             if code_action.time_diff:
@@ -1784,8 +1777,9 @@ class ActionGroupManager:
             
         try:
             # 获取函数行为列表
-            function_action = session.query(ActionFunction).filter_by(id=action_id).first()
+            function_action = session.query(ActionFunction).filter_by(action_list_id=action_id).first()
             if not function_action:
+                logger.error(f"函数动作列表不存在: {action_id}")
                 return False
             #如果function_action.time_diff为空，则不等待
             if function_action.time_diff:
@@ -1884,237 +1878,3 @@ class ActionGroupManager:
         except Exception as e:
             print(f"Error getting hierarchy by id: {e}")
             return None
-
-class ActionRecorder:
-    """行为录制管理器"""
-    
-    def __init__(self, home_tab):
-        self.home_tab = home_tab
-        self.logger = Logger()
-        self.recording = False
-        self.record_window = None
-        self.recorded_events = []
-        self.last_event_time = None
-        self.record_mode = "全部"
-        self.session = None
-        
-    def show_record_options(self):
-        """显示录制选项窗口"""
-        if not self.home_tab.action_group_id:
-            messagebox.showwarning("警告", "请先选择行为组")
-            return False
-            
-        # 隐藏主窗口
-        self.home_tab.my_window.withdraw()
-        
-        # 创建录制选项窗口
-        self.record_window = tk.Toplevel(self.home_tab.my_window)
-        self.record_window.title("录制选项")
-        self.record_window.geometry("400x400")
-        self.record_window.resizable(False, False)
-        self.record_window.transient(self.home_tab.my_window)
-        self.record_window.grab_set()
-        
-        # 居中显示
-        self.record_window.update_idletasks()
-        x = (self.record_window.winfo_screenwidth() // 2) - (400 // 2)
-        y = (self.record_window.winfo_screenheight() // 2) - (400 // 2)
-        self.record_window.geometry(f"400x400+{x}+{y}")
-        
-        # 创建主框架
-        main_frame = ttk.Frame(self.record_window, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # 标题
-        title_label = ttk.Label(main_frame, text="选择录制内容", font=("Arial", 14, "bold"))
-        title_label.pack(pady=(0, 20))
-        
-        # 录制模式选择
-        mode_var = tk.StringVar(value="全部")
-        
-        # 单选按钮框架
-        radio_frame = ttk.Frame(main_frame)
-        radio_frame.pack(pady=10)
-        
-        ttk.Radiobutton(radio_frame, text="单击", variable=mode_var, value="单击").pack(anchor=tk.W, pady=5)
-        ttk.Radiobutton(radio_frame, text="按下弹起", variable=mode_var, value="按下弹起").pack(anchor=tk.W, pady=5)
-        ttk.Radiobutton(radio_frame, text="全部", variable=mode_var, value="全部").pack(anchor=tk.W, pady=5)
-        
-        # 按钮框架
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=20)
-        
-        def start_recording():
-            self.record_mode = mode_var.get()
-            self.record_window.destroy()
-            self.record_window = None
-            self.start_recording_task()
-            
-        def cancel_recording():
-            self.record_window.destroy()
-            self.record_window = None
-            self.home_tab.my_window.deiconify()
-            
-        # 确定按钮
-        ok_button = ttk.Button(button_frame, text="开始录制", command=start_recording)
-        ok_button.pack(side=tk.LEFT, padx=10)
-        
-        # 取消按钮
-        cancel_button = ttk.Button(button_frame, text="取消", command=cancel_recording)
-        cancel_button.pack(side=tk.LEFT, padx=10)
-        
-        return True
-        
-    def start_recording_task(self):
-        """开始录制任务"""
-        try:
-            # 获取结束录制的快捷键
-            config = ConfigManager()
-            end_record_key = config.get_value('Shortcuts', 'endrecord')
-            
-            if not end_record_key:
-                messagebox.showerror("错误", "未配置结束录制快捷键")
-                self.home_tab.my_window.deiconify()
-                return
-                
-            print(f"开始录制，结束快捷键: {end_record_key}")
-            
-            # 初始化录制状态
-            self.recording = True
-            self.recorded_events = []
-            self.last_event_time = time.time()
-            
-            # 获取数据库会话
-            self.session = self._get_session()
-            if not self.session:
-                messagebox.showerror("错误", "无法获取数据库连接")
-                self.home_tab.my_window.deiconify()
-                return
-                
-            # 显示录制状态提示
-            messagebox.showinfo("录制开始", f"录制已开始\n按 {end_record_key} 结束录制")
-            
-            # 启动录制逻辑（简化版本）
-            self._start_simple_recording(end_record_key)
-            
-        except Exception as e:
-            self.logger.error(f"启动录制失败: {str(e)}")
-            print(traceback.format_exc())
-            messagebox.showerror("错误", f"启动录制失败: {str(e)}")
-            self.home_tab.my_window.deiconify()
-            
-    def _get_session(self):
-        """获取数据库会话"""
-        try:
-            config_manager = ConfigManager()
-            db_path = config_manager.get_value('System', 'DataSource')
-            encryption_key = config_manager.get_value('Security', 'DBEncryptionKey')
-            
-            if not db_path or not encryption_key:
-                self.logger.error("数据库配置信息不完整")
-                return None
-                
-            db_manager = DatabaseManager(db_path, encryption_key)
-            db_manager.initialize()
-            return db_manager.Session()
-        except Exception as e:
-            self.logger.error(f"获取数据库会话失败: {str(e)}")
-            return None
-            
-    def _start_simple_recording(self, end_record_key):
-        """启动简化版录制"""
-        # 这里实现简化版的录制逻辑
-        # 实际项目中需要更复杂的鼠标键盘监听
-        print("录制功能待完善...")
-        messagebox.showinfo("提示", "录制功能正在开发中...")
-        self.home_tab.my_window.deiconify()
-
-def _home_record_action(home_tab):
-    """录制行为的主函数"""
-    try:
-        if not home_tab.action_group_id:
-            messagebox.showwarning("警告", "请先选择行为组")
-            return False
-            
-        recorder = ActionRecorder(home_tab)
-        return recorder.show_record_options()
-        
-    except Exception as e:
-        logger.error(f"录制行为失败: {str(e)}")
-        print(traceback.format_exc())
-        messagebox.showerror("错误", f"录制行为失败: {str(e)}")
-        return False
-
-def get_screen_region_coordinates(master, left_top_x_var, left_top_y_var, right_bottom_x_var, right_bottom_y_var):
-    """
-    弹出全屏子窗体让用户用鼠标选择矩形区域，获取左上和右下坐标，并填充到传入的tk变量。
-    Args:
-        master: 主窗口（tk.Tk或Toplevel）
-        left_top_x_var, left_top_y_var, right_bottom_x_var, right_bottom_y_var: tk.StringVar
-    Returns:
-        (x1, y1, x2, y2): 选区左上和右下坐标
-    """
-    class RegionSelector:
-        def __init__(self, master, lx_var, ly_var, rx_var, ry_var):
-            self.master = master
-            self.lx_var = lx_var
-            self.ly_var = ly_var
-            self.rx_var = rx_var
-            self.ry_var = ry_var
-            self.start_x = None
-            self.start_y = None
-            self.end_x = None
-            self.end_y = None
-            self.rect = None
-            self.result = None
-            self.done = False
-
-            self.root = tk.Toplevel(master)
-            self.root.attributes('-fullscreen', True)
-            self.root.attributes('-alpha', 0.3)
-            self.root.configure(bg='grey')
-            self.root.title('选择区域')
-            self.root.focus_set()
-            self.root.grab_set()
-            self.root.bind('<Escape>', lambda e: self.cancel())
-
-            screen_width = self.root.winfo_screenwidth()
-            screen_height = self.root.winfo_screenheight()
-            self.canvas = tk.Canvas(self.root, width=screen_width, height=screen_height)
-            self.canvas.pack()
-            self.canvas.bind('<Button-1>', self.on_mouse_down)
-            self.canvas.bind('<B1-Motion>', self.on_mouse_move)
-            self.canvas.bind('<ButtonRelease-1>', self.on_mouse_up)
-
-        def on_mouse_down(self, event):
-            self.start_x = event.x
-            self.start_y = event.y
-            if self.rect:
-                self.canvas.delete(self.rect)
-            self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline='red', width=2)
-
-        def on_mouse_move(self, event):
-            if self.rect:
-                self.canvas.coords(self.rect, self.start_x, self.start_y, event.x, event.y)
-
-        def on_mouse_up(self, event):
-            self.end_x = event.x
-            self.end_y = event.y
-            x1, y1 = min(self.start_x, self.end_x), min(self.start_y, self.end_y)
-            x2, y2 = max(self.start_x, self.end_x), max(self.start_y, self.end_y)
-            self.lx_var.set(str(x1))
-            self.ly_var.set(str(y1))
-            self.rx_var.set(str(x2))
-            self.ry_var.set(str(y2))
-            self.result = (x1, y1, x2, y2)
-            self.done = True
-            self.root.destroy()
-
-        def cancel(self):
-            self.result = None
-            self.done = True
-            self.root.destroy()
-
-    selector = RegionSelector(master, left_top_x_var, left_top_y_var, right_bottom_x_var, right_bottom_y_var)
-    selector.root.wait_window()
-    return selector.result

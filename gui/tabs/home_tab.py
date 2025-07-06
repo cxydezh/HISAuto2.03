@@ -14,7 +14,7 @@ import time
 from models.user import User
 from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy
 from utils.screenshot_tool import ScreenshotTool
-from utils.home_tab_func import home_tab_func, ActionManager, ActionGroupManager
+from utils.home_tab_func import home_tab_action_group_func, ActionManager, ActionGroupManager
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -465,8 +465,13 @@ class HomeTab(BaseTab):
         # 动态显示区域
         self.action_list_frame = ttk.Frame(action_list_frame_main)
         self.action_list_frame.grid(row=1, column=0, sticky=tk.NSEW, padx=5, pady=5)
+        
+        # 强制设置最小高度为250px
         self.action_list_frame.pack_propagate(False)
-        self.action_list_frame.configure(height=100)
+        self.action_list_frame.grid_propagate(False)  # 防止grid布局影响大小
+        self.action_list_frame.configure(height=170)  # 设置固定尺寸
+        
+        # 配置网格权重
         self.action_list_frame.grid_rowconfigure(0, weight=1)
         self.action_list_frame.grid_columnconfigure(0, weight=1)
         
@@ -932,10 +937,6 @@ class HomeTab(BaseTab):
         if self.action_group_hierarchy_tree_iid == None: 
             messagebox.showinfo("提示", "请先选择行为组")
             return
-        #调用show_mode_picker方法,获取用户的新建意图
-        self.show_mode_picker(self.my_window)
-        if self.relate_location_selected == None:
-            return
 
         #修改行为组相关按钮
         self.btn_add_excel_file.config(state='normal')
@@ -960,8 +961,8 @@ class HomeTab(BaseTab):
                 messagebox.showwarning("警告", "启用自动执行时，必须设置执行时间")
                 return
             
-            # 创建home_tab_func实例
-            home_tab_func_model = home_tab_func(
+            # 创建home_tab_action_group_func实例
+            home_tab_action_group_func_model = home_tab_action_group_func(
                 self.group_name_var.get().strip(), 
                 self.group_desc_var.get().strip(),
                 globalvariable.USER_ID,
@@ -977,7 +978,7 @@ class HomeTab(BaseTab):
             )
             
             # 保存行为组
-            if home_tab_func_model._save_action_group():
+            if home_tab_action_group_func_model._save_action_group():
                 messagebox.showinfo("成功", "保存行为组成功")
                 # 刷新行为组列表
                 self._refresh_action_group()
@@ -992,8 +993,8 @@ class HomeTab(BaseTab):
             messagebox.showerror("错误", f"保存行为组时发生异常: {str(e)}")
         finally:
             # 确保关闭数据库会话
-            if 'home_tab_func_model' in locals():
-                home_tab_func_model._session_close()
+            if 'home_tab_action_group_func_model' in locals():
+                home_tab_action_group_func_model._session_close()
     
     def _reset_action_group_interface(self):
         """重置行为组界面状态"""
@@ -1038,8 +1039,8 @@ class HomeTab(BaseTab):
             
         if messagebox.askyesno("确认", "确定要删除选中的行为组吗？\n此操作将同时删除该行为组下的所有行为元，且不可恢复。"):
             try:
-                # 创建home_tab_func实例
-                home_tab_func_model = home_tab_func(
+                # 创建home_tab_action_group_func实例
+                home_tab_action_group_func_model = home_tab_action_group_func(
                     self.group_name_var.get().strip(), 
                     self.group_desc_var.get().strip(),
                     globalvariable.USER_ID,
@@ -1055,7 +1056,7 @@ class HomeTab(BaseTab):
                 )
                 
                 # 删除行为组
-                if home_tab_func_model._delete_action_group():
+                if home_tab_action_group_func_model._delete_action_group():
                     messagebox.showinfo("成功", "删除行为组成功")
                     # 刷新行为组列表
                     self._refresh_action_group()
@@ -1072,8 +1073,8 @@ class HomeTab(BaseTab):
                 messagebox.showerror("错误", f"删除行为组时发生异常: {str(e)}")
             finally:
                 # 确保关闭数据库会话
-                if 'home_tab_func_model' in locals():
-                    home_tab_func_model._session_close()
+                if 'home_tab_action_group_func_model' in locals():
+                    home_tab_action_group_func_model._session_close()
     
     def _clear_action_group_info(self):
         """清空行为组信息"""
@@ -1108,7 +1109,10 @@ class HomeTab(BaseTab):
     def _run_action_group(self):
         """运行行为组"""
         action_group_manager = ActionGroupManager(self)
-        action_group_manager.run_action_group(self.action_group_id)
+        if action_group_manager.run_action_group(self.action_group_id):
+            messagebox.showinfo("提示", "行为组运行成功")
+        else:
+            messagebox.showerror("错误", "行为组运行失败")
     
     # =============================================================================
     # 中间面板相关方法（行为类型切换 -> 控件创建 -> 行为列表 -> 行为操作）
@@ -1529,16 +1533,14 @@ class HomeTab(BaseTab):
             if validation_errors:
                 error_message = "请修正以下错误：\n" + "\n".join(validation_errors)
                 messagebox.showwarning("验证错误", error_message)
-                return False
             
             if self.action_manager.save_action():
                 # 刷新行为列表
                 self._refresh_action_list()
                 # 更新按钮状态
                 self._update_action_buttons_state()
-                return True
-            else:
-                return False
+                #弹窗提示任务完成
+                messagebox.showinfo("提示", "行为元保存成功")
         except Exception as e:
             messagebox.showerror("错误", f"保存行为元时发生异常: {str(e)}")
             print(traceback.format_exc())
