@@ -1,7 +1,9 @@
+import configparser
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 from datetime import datetime
 import traceback
+# from config import config_manager  # 注释掉错误的导入
 from gui.tabs.base_tab import BaseTab
 from config.config_manager import ConfigManager
 import globalvariable
@@ -1286,7 +1288,8 @@ class HomeTab(BaseTab):
         right_frame = ttk.Frame(self.action_list_frame)
         left_frame.grid(row=0, column=0, sticky=tk.NSEW, padx=5)
         right_frame.grid(row=0, column=1, sticky=tk.NSEW, padx=5)
-        
+        self.action_group_image_match_group = self._get_image_match_group()
+
         # 左列控件
         # 获取左上角坐标
         ttk.Button(left_frame, text="获取区域坐标", command=self._get_region_coordinates).grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)  
@@ -1313,15 +1316,16 @@ class HomeTab(BaseTab):
         # 右列控件
         # 图像名称
         ttk.Label(right_frame, text="图像名称:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        
         self.action_image_names_var = tk.StringVar(master=self.frame)
-        ttk.Entry(right_frame, textvariable=self.action_image_names_var).grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        ttk.Combobox(right_frame, textvariable=self.action_image_names_var, values=self.action_group_image_match_group, state="readonly").grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
     
 
         # 匹配条件
         ttk.Label(right_frame, text="匹配条件:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_image_match_criteria_var = tk.StringVar(master=self.frame)
         ttk.Entry(right_frame, textvariable=self.action_image_match_criteria_var).grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
-        
+        self.action_image_match_group_dic = {}
         # 鼠标动作
         ttk.Label(right_frame, text="鼠标动作:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
         self.image_mouse_action_var = tk.StringVar(master=self.frame)
@@ -1338,7 +1342,33 @@ class HomeTab(BaseTab):
         # 配置grid权重
         self.action_list_frame.grid_columnconfigure(0, weight=1)
         self.action_list_frame.grid_columnconfigure(1, weight=1)
-        
+    def _get_image_match_group(self):
+        """获取图像匹配组字典"""
+        try:
+            # 先获取到当前的action_group_id对应的文件夹，然后从文件夹中获取到所有文件，然后获取到文件的名称，然后获取到文件的名称的
+            # 文件夹路径为：从HISAutoConfiguration.cfg中获取到sysfolder路径，然后拼接上/action_group/,然后拼接上action_group_id，然后拼接上/Picture/
+            # 使用ConfigManager中的get_value方法获取到sysfolder路径
+            config = ConfigManager()
+            sysfolder = config.get_value("System", "sysfolder")
+            if not self.action_group_id:
+                return []
+            
+            picture_folder = os.path.join(sysfolder, "ActionsGroup", str(self.action_group_id), "Picture")
+            
+            # 检查文件夹是否存在
+            if not os.path.exists(picture_folder):
+                return []
+            
+            # 获取到picture_folder中的所有文件，然后获取到文件的名称，然后获取到文件的名称的
+            image_files = []
+            for file in os.listdir(picture_folder):
+                if file.endswith((".png", ".jpg", ".jpeg")):
+                    image_files.append(file)
+            return image_files
+        except Exception as e:
+            print(f"获取图像匹配组失败: {e}")
+            return []
+
     def _create_function_controls(self):
         """创建函数控件"""
         # 函数名称
