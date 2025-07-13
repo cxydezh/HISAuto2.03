@@ -10,7 +10,8 @@ python-logging-loki==0.3.1
 cryptography==44.0.3
 mouse==0.7.1
 pysqlcipher3==1.2.0
-sqlite3==2.6.0
+# sqlite3 is built-in to Python, no need to install
 psutil==6.0.0
 pillow==11.1.0
 pywin32==3.06
+requests==2.32.3

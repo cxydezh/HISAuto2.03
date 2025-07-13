@@ -1579,7 +1579,12 @@ class HomeTab(BaseTab):
     @prevent_double_click(interval=1.0)
     def _use_suit(self):
         """调用套餐"""
-        messagebox.showinfo("提示", "调用套餐功能待实现")
+        # 开始调用套餐，创建套餐窗口（suit_view.py)
+        from gui.suit_view import SuitView
+        # 创建套餐窗口，采用对话框模式
+        suit_view = SuitView(self.main_window.window,self.action_group_id,self.current_action_id)
+        # 等待窗口关闭
+        self.main_window.window.wait_window(suit_view)
     
     # =============================================================================
     # 右侧面板相关方法（调试行为类型切换 -> 调试控件创建 -> 调试列表 -> 调试操作）

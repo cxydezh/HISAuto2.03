@@ -11,7 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 import pyautogui
 from pynput import mouse, keyboard
-
+import win32gui
+import win32api
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
 from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt
@@ -692,12 +693,14 @@ class ActionManager:
             self.home_tab.btn_record_action.config(state='normal')
             self.home_tab.btn_modify_action.config(state='normal')
             self.home_tab.btn_delete_action.config(state='normal')
+            self.home_tab.btn_use_suit.config(state='normal')
             self.home_tab.btn_save_action.config(state='disabled')
         else:
             self.home_tab.btn_create_action.config(state='disabled')
             self.home_tab.btn_record_action.config(state='disabled')
             self.home_tab.btn_modify_action.config(state='disabled')
             self.home_tab.btn_delete_action.config(state='disabled')
+            self.home_tab.btn_use_suit.config(state='disabled')
             self.home_tab.btn_save_action.config(state='normal')
     def _clear_action_detail_controls(self):
         """清空行为详情控件"""
@@ -1297,7 +1300,40 @@ class ActionGroupManager:
         if self._session:
             self._session.close()
             self._session = None
-    
+    def get_current_class(self,class_action):
+                    # 获取当前鼠标所在位置的应用信息
+            
+            # 获取当前鼠标位置
+            x, y = win32api.GetCursorPos()
+            
+            # 获取鼠标位置下的窗口句柄
+            window_handle = win32gui.WindowFromPoint((x, y))
+            
+            # 获取窗口类名
+            current_class_name = win32gui.GetClassName(window_handle)
+            
+            # 获取窗口标题
+            current_window_title = win32gui.GetWindowText(window_handle)
+            
+            logger.info(f"当前鼠标位置: ({x}, {y})")
+            logger.info(f"当前窗口类名: {current_class_name}")
+            logger.info(f"当前窗口标题: {current_window_title}")
+            
+            # 检查类名和窗口标题是否匹配
+            if class_action.class_name or class_action.class_name != "":
+                class_name_match = (current_class_name == class_action.class_name)
+            else:
+                class_name_match = True
+            if class_action.windows_title or class_action.windows_title != "":
+                window_title_match = (current_window_title == class_action.windows_title)
+            else:
+                window_title_match = True
+            if class_name_match and window_title_match:
+                logger.info("类名和窗口标题匹配成功")
+                return True
+            else:
+                logger.info(f"匹配失败 - 期望类名: {class_action.class_name}, 窗口标题: {class_action.windows_title}")
+
     def get_action_group_data(self, group_id):
         """获取行为组数据"""
         session = self._get_session()
@@ -1585,8 +1621,11 @@ class ActionGroupManager:
             #如果class_action.time_diff为空，则不等待
             if class_action.time_diff:
                 time.sleep(class_action.time_diff)
-            # 待完善
-            return False
+            # 获取当前鼠标所在的位置所在的应用的类名，然后与class_action.class_name进行匹配
+            if self.get_current_class(class_action):
+                return True
+            else:
+                return False
         except Exception as e:
             print(f"Error in run_class_action: {e}")
             return False

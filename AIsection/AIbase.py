@@ -1,7 +1,7 @@
 import requests
 import json
 import tkinter as tk
-
+# 这里提供AI的基础功能，构建调用AI接口的基础框架。
 response = requests.post(
     "http://172.17.40.16:11434/api/generate",
     json={

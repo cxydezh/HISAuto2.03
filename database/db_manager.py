@@ -144,3 +144,107 @@ class DatabaseManager:
             result = session.execute(text(query), params or {})
             session.commit()
             return result.rowcount
+            
+    # 组套相关方法
+    def get_all_action_suit_groups(self):
+        """获取所有组套"""
+        try:
+            from models.action_suit import ActionsSuitGroup
+            with self.get_session() as session:
+                return session.query(ActionsSuitGroup).all()
+        except Exception as e:
+            print(f"获取组套列表失败: {e}")
+            return []
+            
+    def create_action_suit_group(self, suit_group):
+        """创建组套"""
+        try:
+            with self.get_session() as session:
+                session.add(suit_group)
+                session.commit()
+                session.refresh(suit_group)
+                return suit_group.id
+        except Exception as e:
+            print(f"创建组套失败: {e}")
+            return None
+            
+    def update_action_suit_group(self, suit_group):
+        """更新组套"""
+        try:
+            with self.get_session() as session:
+                session.merge(suit_group)
+                session.commit()
+                return True
+        except Exception as e:
+            print(f"更新组套失败: {e}")
+            return False
+            
+    def delete_action_suit_group(self, suit_group_id):
+        """删除组套"""
+        try:
+            from models.action_suit import ActionsSuitGroup, ActionsSuitList
+            with self.get_session() as session:
+                # 先删除关联的行为列表
+                session.query(ActionsSuitList).filter_by(group_id=suit_group_id).delete()
+                # 再删除组套
+                session.query(ActionsSuitGroup).filter_by(id=suit_group_id).delete()
+                session.commit()
+                return True
+        except Exception as e:
+            print(f"删除组套失败: {e}")
+            return False
+            
+    def get_action_lists_by_suit_group_id(self, suit_group_id):
+        """根据组套ID获取行为列表"""
+        try:
+            from models.action_suit import ActionsSuitList
+            with self.get_session() as session:
+                return session.query(ActionsSuitList).filter_by(group_id=suit_group_id).all()
+        except Exception as e:
+            print(f"获取行为列表失败: {e}")
+            return []
+            
+    def get_action_list_by_id(self, action_list_id):
+        """根据ID获取行为列表"""
+        try:
+            from models.action_suit import ActionsSuitList
+            with self.get_session() as session:
+                return session.query(ActionsSuitList).filter_by(id=action_list_id).first()
+        except Exception as e:
+            print(f"获取行为列表失败: {e}")
+            return None
+            
+    def create_action_suit_list(self, action_list):
+        """创建行为列表"""
+        try:
+            with self.get_session() as session:
+                session.add(action_list)
+                session.commit()
+                session.refresh(action_list)
+                return action_list.id
+        except Exception as e:
+            print(f"创建行为列表失败: {e}")
+            return None
+            
+    def update_action_suit_list(self, action_list):
+        """更新行为列表"""
+        try:
+            with self.get_session() as session:
+                session.merge(action_list)
+                session.commit()
+                return True
+        except Exception as e:
+            print(f"更新行为列表失败: {e}")
+            return False
+            
+    def delete_action_suit_list(self, action_list_id):
+        """删除行为列表"""
+        try:
+            from models.action_suit import ActionsSuitList
+            with self.get_session() as session:
+                session.query(ActionsSuitList).filter_by(id=action_list_id).delete()
+                session.commit()
+                return True
+        except Exception as e:
+            print(f"删除行为列表失败: {e}")
+            return False
