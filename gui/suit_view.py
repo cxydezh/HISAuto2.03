@@ -103,7 +103,7 @@ class SuitView(tk.Toplevel):
         button_frame.pack(fill=tk.X, padx=5, pady=5)
         #这里参考了home_tab.py中的self.action_tree的右键菜单
         self.tree_context_menu = tk.Menu(self.suit_tree, tearoff=0)
-        self.tree_context_menu.add_command(label="新建组", command=self.suit_func.new_suit)
+        self.tree_context_menu.add_command(label="新建组", command=self.suit_func.new_suit_group)
         self.tree_context_menu.add_command(label="编辑", command=self.suit_func.edit_suit)
         self.tree_context_menu.add_command(label="删除", command=self.suit_func.delete_suit)
         self.tree_context_menu.add_command(label="刷新", command=self.suit_func.refresh_data)

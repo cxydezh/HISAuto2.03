@@ -40,11 +40,38 @@ class SuitViewFunc:
             current_action_id: 当前行为ID
         """
         self.suit_view = suit_view
-        self.action_group_id = action_group_id
+        self.suit_group_id = action_group_id
         self.current_action_id = current_action_id
         self.session = None
         self.config_manager = ConfigManager()
         
+        # =============================================================================
+        # 全局属性 - 用于保存中间过程的变量
+        # =============================================================================
+        
+        # 组套树形视图选中项的iid,格式如：group_11或A1B2C3D4
+        self.suit_group_hierarchy_tree_iid = None
+        # show_mode_picker中选择的相对位置
+        self.relate_location_selected = None
+        # 组套树形视图选中项的rank 格式如：A1B2C3D4
+        self.suit_group_selected_rank = None
+        # 组套树形视图选中项的rank中的sort_num的值
+        self.hierarchy_sort = None
+        # 组套类型，1:表示新增保存；2.表示修改保存；3.表示删除suit_group；4.表示删除suit_group_hierarchy；
+        self.suit_group_action_type = None
+        # 选中组套ID
+        self.suit_group_id = None
+        # 选中组套层次ID
+        self.suit_group_hierarchy_id = None
+        # 组套树形视图选中项的rank中的A的值
+        self.suit_group_selected_Arank = None
+        
+        # 行为元操作相关全局变量
+        # 行为元操作类型，1:表示新增保存；2:表示修改保存；3:表示删除
+        self.action_operation_type = None
+        # 当前选中的行为元ID
+        self.current_action_id = None
+    
     def _get_session(self):
         """获取数据库会话"""
         try:
@@ -228,12 +255,54 @@ class SuitViewFunc:
         }
         return action_type_map.get(action_type, action_type)
     
+    def new_suit_group(self):
+        """新建组套组 - 参考home_tab.py中的_new_action_group_group方法"""
+        try:
+            # 先判断是否有Hierarchy tree是否有被选中的项目
+            selected = self.suit_view.suit_tree.selection()
+            if not selected:
+                messagebox.showinfo("提示", "请先选择组套层次")
+                return
+            
+            selected_iid = selected[0]
+            if selected_iid.startswith("suit_"):
+                messagebox.showinfo("提示", "请选择层次节点，而不是组套节点")
+                return
+            
+            # 保存选中的层次信息
+            self.suit_group_hierarchy_tree_iid = selected_iid
+            self.suit_group_selected_rank = selected_iid
+            
+            # 获取层次信息
+            hierarchy = self._get_hierarchy_by_iid(selected_iid)
+            if hierarchy:
+                self.hierarchy_sort = hierarchy.sort_num
+                self.suit_group_hierarchy_id = hierarchy.id
+                self.suit_group_selected_Arank = hierarchy.group_rank[0] if hierarchy.group_rank else None
+            
+            # 调用show_mode_picker方法,获取用户的新建意图
+            self.show_mode_picker(self.suit_view)
+            if self.relate_location_selected == None:
+                return
+            
+            # 创建层次管理器窗口
+            from utils.actionGroupHierarchyManager import ActionGroupHierarchy_Manager
+            ActionGroupHierarchy_Manager(self.suit_view, "ActionsSuitGroupHierarchy", self.suit_group_selected_rank, self.relate_location_selected, self.hierarchy_sort)
+
+            # 刷新组套树
+            self.refresh_data()
+            
+        except Exception as e:
+            logger.error(f"新建组套组失败: {str(e)}")
+            messagebox.showerror("错误", f"新建组套组失败: {str(e)}")
+    
     def new_suit(self):
         """新建组套 - 参考home_tab.py中的_new_action_group方法"""
         try:
+            # 先判断是否有Hierarchy tree是否有被选中的项目
             selected = self.suit_view.suit_tree.selection()
             if not selected:
-                messagebox.showwarning("提示", "请先选择一个层次节点")
+                messagebox.showinfo("提示", "请先选择组套层次")
                 return
             
             iid = selected[0]
@@ -247,11 +316,22 @@ class SuitViewFunc:
                 messagebox.showwarning("提示", "请选择具体的层次节点")
                 return
             
+            # 保存选中的层次信息
+            self.suit_group_hierarchy_tree_iid = iid
+            self.suit_group_selected_rank = iid
+            
             # 获取层次ID
             hierarchy = self._get_hierarchy_by_iid(iid)
             if not hierarchy:
                 messagebox.showerror("错误", "未找到选中的层次节点")
                 return
+            
+            # 保存层次信息
+            self.current_hierarchy_id = hierarchy.id
+            self.suit_group_hierarchy_rank = hierarchy.group_rank
+            self.suit_group_hierarchy_id = hierarchy.id
+            self.hierarchy_sort = hierarchy.sort_num
+            self.suit_group_selected_Arank = hierarchy.group_rank[0] if hierarchy.group_rank else None
             
             # 清空表单
             self.clear_suit_form()
@@ -259,13 +339,10 @@ class SuitViewFunc:
             # 设置新建模式
             self._set_suit_form_new_mode()
             
-            # 保存当前层次ID
-            self.current_hierarchy_id = hierarchy.id
-            self.suit_group_hierarchy_rank = hierarchy.group_rank
-            self.suit_group_hierarchy_id = hierarchy.id
+            # 设置操作类型为新建
+            self.suit_group_action_type = 1
             
             logger.info(f"开始新建组套，层次ID: {hierarchy.id}")
-            messagebox.showinfo("提示", "请在表单中填写组套信息")
             
         except Exception as e:
             logger.error(f"新建组套失败: {str(e)}")
@@ -287,15 +364,17 @@ class SuitViewFunc:
     def _set_suit_buttons_new_mode(self):
         """设置组套相关按钮为新建模式"""
         try:
-            # 这里可以根据实际的按钮控件名称进行调整
-            if hasattr(self.suit_view, 'btn_new_suit'):
-                self.suit_view.btn_new_suit.config(state='disabled')
-            if hasattr(self.suit_view, 'btn_edit_suit'):
-                self.suit_view.btn_edit_suit.config(state='disabled')
-            if hasattr(self.suit_view, 'btn_save_suit'):
-                self.suit_view.btn_save_suit.config(state='normal')
-            if hasattr(self.suit_view, 'btn_delete_suit'):
-                self.suit_view.btn_delete_suit.config(state='disabled')
+            # 根据suit_view.py中的实际按钮名称设置状态
+            if hasattr(self.suit_view, 'new_btn'):
+                self.suit_view.new_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'edit_btn'):
+                self.suit_view.edit_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'save_btn'):
+                self.suit_view.save_btn.config(state='normal')
+            if hasattr(self.suit_view, 'delete_btn'):
+                self.suit_view.delete_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'refresh_btn'):
+                self.suit_view.refresh_btn.config(state='normal')
                 
         except Exception as e:
             logger.error(f"设置组套按钮新建模式失败: {str(e)}")
@@ -319,9 +398,10 @@ class SuitViewFunc:
     def edit_suit(self):
         """编辑组套 - 参考home_tab.py中的_edit_action_group方法"""
         try:
+            # 先判断是否有Hierarchy tree是否有被选中的项目
             selected = self.suit_view.suit_tree.selection()
             if not selected:
-                messagebox.showwarning("提示", "请先选择一个组套")
+                messagebox.showinfo("提示", "请先选择组套")
                 return
             
             iid = selected[0]
@@ -334,10 +414,15 @@ class SuitViewFunc:
             # 获取组套ID
             suit_id = int(iid.split("_")[1])
             
+            # 保存组套ID
+            self.suit_group_id = suit_id
+            
             # 加载组套数据
             if self.load_suit_data(suit_id):
                 # 设置编辑模式
                 self._set_suit_form_edit_mode()
+                # 设置操作类型为编辑
+                self.suit_group_action_type = 2
                 logger.info(f"开始编辑组套: {suit_id}")
             else:
                 logger.error(f"加载组套数据失败: {suit_id}")
@@ -351,7 +436,7 @@ class SuitViewFunc:
         try:
             selected = self.suit_view.suit_tree.selection()
             if not selected:
-                messagebox.showwarning("提示", "请先选择一个组套")
+                messagebox.showwarning("警告", "请先选择要删除的组套")
                 return
             
             iid = selected[0]
@@ -364,6 +449,9 @@ class SuitViewFunc:
             # 获取组套ID
             suit_id = int(iid.split("_")[1])
             
+            # 保存组套ID
+            self.suit_group_id = suit_id
+            
             # 获取组套信息用于确认
             session = self._get_session()
             if not session:
@@ -375,8 +463,11 @@ class SuitViewFunc:
                 return
             
             # 确认删除
-            if not messagebox.askyesno("确认", f"确定要删除组套 '{group.action_list_group_name}' 吗？\n此操作不可恢复！"):
+            if not messagebox.askyesno("确认", f"确定要删除组套 '{group.action_list_group_name}' 吗？\n此操作将同时删除该组套下的所有行为元，且不可恢复。"):
                 return
+            
+            # 设置操作类型为删除
+            self.suit_group_action_type = 3
             
             # 删除组套下的所有行为
             actions = session.query(ActionsSuitList).filter_by(group_id=suit_id).all()
@@ -390,18 +481,78 @@ class SuitViewFunc:
             session.delete(group)
             session.commit()
             
-            messagebox.showinfo("提示", f"组套 '{group.action_list_group_name}' 删除成功")
+            messagebox.showinfo("成功", f"组套 '{group.action_list_group_name}' 删除成功")
             logger.info(f"组套删除成功: {group.action_list_group_name}")
             
             # 刷新数据
             self.refresh_data()
-            self.clear_suit_form()
+            # 清空当前选中的组套信息
+            self._clear_suit_info()
                 
         except Exception as e:
             logger.error(f"删除组套失败: {str(e)}")
             messagebox.showerror("错误", f"删除组套失败: {str(e)}")
         finally:
             self._close_session()
+    
+    def _clear_suit_info(self):
+        """清空组套信息 - 参考home_tab.py中的_clear_action_group_info方法"""
+        try:
+            # 清空表单
+            self.clear_suit_form()
+            
+            # 重置相关变量
+            self.suit_group_hierarchy_tree_iid = None
+            self.suit_group_selected_rank = None
+            self.hierarchy_sort = None
+            self.suit_group_action_type = None
+            self.suit_group_id = None
+            self.suit_group_hierarchy_id = None
+            self.suit_group_selected_Arank = None
+            
+            # 清空行为列表
+            self.load_action_list()
+            
+            logger.info("组套信息已清空")
+            
+        except Exception as e:
+            logger.error(f"清空组套信息失败: {str(e)}")
+    
+    def capture_image(self):
+        """图像采集 - 参考home_tab.py中的_capture_image方法"""
+        try:
+            # 检查是否有选中的组套
+            if not self.suit_group_id:
+                messagebox.showwarning("警告", "请先选择组套")
+                return
+                
+            # 使用改进后的独立函数
+            from utils.suit_view_func import _suit_capture_image
+            if not _suit_capture_image(self.suit_group_id, self.suit_view):
+                messagebox.showerror("错误", "图像采集失败")
+        except Exception as e:
+            logger.error(f"图像采集失败: {str(e)}")
+            print(traceback.format_exc())
+    
+    def _suit_capture_image(suit_group_id, parent_window):
+        """组套图像采集独立函数 - 参考home_tab.py中的_home_capture_image方法"""
+        try:
+            # 创建图像采集工具
+            screenshot_tool = ScreenshotTool(parent_window)
+            
+            # 执行图像采集
+            success = screenshot_tool.capture_and_save()
+            
+            if success:
+                logger.info(f"组套 {suit_group_id} 图像采集成功")
+                return True
+            else:
+                logger.error(f"组套 {suit_group_id} 图像采集失败")
+                return False
+                
+        except Exception as e:
+            logger.error(f"组套图像采集异常: {str(e)}")
+            return False
     
     def _delete_action_detail(self, session, action_id, action_type):
         """删除行为详细信息"""
@@ -432,35 +583,22 @@ class SuitViewFunc:
     def save_suit(self):
         """保存组套 - 参考home_tab.py中的_save_action_group方法"""
         try:
-            # 验证表单数据
+            # 验证必填字段
             suit_name = self.suit_view.suit_name.get().strip()
             suit_note = self.suit_view.suit_note.get("1.0", tk.END).strip()
             
             if not suit_name:
-                messagebox.showwarning("提示", "请输入组套名称")
+                messagebox.showwarning("警告", "请输入组套名称")
                 return
             
             session = self._get_session()
             if not session:
                 return False
             
-            # 检查是新建还是编辑
-            if hasattr(self, 'current_suit_id') and self.current_suit_id:
-                # 编辑模式
-                group = session.query(ActionsSuitGroup).filter_by(id=self.current_suit_id).first()
-                if group:
-                    group.action_list_group_name = suit_name
-                    group.action_list_group_note = suit_note
-                    group.updated_at = datetime.now()
-                    session.commit()
-                    messagebox.showinfo("提示", "组套更新成功")
-                    logger.info(f"组套更新成功: {suit_name}")
-                else:
-                    messagebox.showerror("错误", "未找到要更新的组套")
-                    logger.error(f"未找到要更新的组套: {self.current_suit_id}")
-            else:
+            # 根据操作类型执行不同的保存逻辑
+            if self.suit_group_action_type == 1:
                 # 新建模式
-                if not hasattr(self, 'current_hierarchy_id'):
+                if not hasattr(self, 'current_hierarchy_id') or not self.current_hierarchy_id:
                     messagebox.showerror("错误", "请先选择层次节点")
                     return
                 
@@ -476,24 +614,67 @@ class SuitViewFunc:
                     action_list_group_note=suit_note,
                     group_rank_id=self.current_hierarchy_id,
                     sort_num=new_sort_num,
-                    user_id=globalvariable.current_user_id,
-                    department_id=globalvariable.current_department_id,
+                    user_id=globalvariable.USER_ID,
+                    department_id=globalvariable.USER_DEPARTMENT_ID,
                     created_at=datetime.now()
                 )
                 session.add(new_group)
                 session.commit()
-                messagebox.showinfo("提示", "组套创建成功")
+                messagebox.showinfo("成功", "组套创建成功")
                 logger.info(f"组套创建成功: {suit_name}")
+                
+            elif self.suit_group_action_type == 2:
+                # 编辑模式
+                if not hasattr(self, 'current_suit_id') or not self.current_suit_id:
+                    messagebox.showerror("错误", "未找到要更新的组套")
+                    return
+                
+                group = session.query(ActionsSuitGroup).filter_by(id=self.current_suit_id).first()
+                if group:
+                    group.action_list_group_name = suit_name
+                    group.action_list_group_note = suit_note
+                    group.updated_at = datetime.now()
+                    session.commit()
+                    messagebox.showinfo("成功", "组套更新成功")
+                    logger.info(f"组套更新成功: {suit_name}")
+                else:
+                    messagebox.showerror("错误", "未找到要更新的组套")
+                    logger.error(f"未找到要更新的组套: {self.current_suit_id}")
+            else:
+                messagebox.showerror("错误", "无效的操作类型")
+                return
             
             # 刷新数据
             self.refresh_data()
-            self.clear_suit_form()
+            # 重置界面状态
+            self._reset_suit_interface()
             
         except Exception as e:
             logger.error(f"保存组套失败: {str(e)}")
             messagebox.showerror("错误", f"保存组套失败: {str(e)}")
         finally:
             self._close_session()
+    
+    def _reset_suit_interface(self):
+        """重置组套界面状态 - 参考home_tab.py中的_reset_action_group_interface方法"""
+        try:
+            # 禁用所有相关控件
+            self.suit_view.suit_name.config(state='disabled')
+            self.suit_view.suit_note.config(state='disabled')
+            
+            # 设置按钮状态
+            self._set_suit_buttons_default_mode()
+            
+            # 清空表单
+            self.clear_suit_form()
+            
+            # 重置操作类型
+            self.suit_group_action_type = None
+            
+            logger.info("组套界面状态已重置")
+            
+        except Exception as e:
+            logger.error(f"重置组套界面状态失败: {str(e)}")
     
     def load_suit_data(self, suit_id):
         """加载组套数据到表单:这里参考home_tab.py中的_refresh_action_group方法"""
@@ -566,16 +747,17 @@ class SuitViewFunc:
     def _set_suit_buttons_edit_mode(self):
         """设置组套相关按钮为编辑模式"""
         try:
-            # 这里可以根据实际的按钮控件名称进行调整
-            # 示例：启用编辑相关按钮，禁用新建按钮
-            if hasattr(self.suit_view, 'btn_new_suit'):
-                self.suit_view.btn_new_suit.config(state='disabled')
-            if hasattr(self.suit_view, 'btn_edit_suit'):
-                self.suit_view.btn_edit_suit.config(state='disabled')
-            if hasattr(self.suit_view, 'btn_save_suit'):
-                self.suit_view.btn_save_suit.config(state='normal')
-            if hasattr(self.suit_view, 'btn_delete_suit'):
-                self.suit_view.btn_delete_suit.config(state='normal')
+            # 根据suit_view.py中的实际按钮名称设置状态
+            if hasattr(self.suit_view, 'new_btn'):
+                self.suit_view.new_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'edit_btn'):
+                self.suit_view.edit_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'save_btn'):
+                self.suit_view.save_btn.config(state='normal')
+            if hasattr(self.suit_view, 'delete_btn'):
+                self.suit_view.delete_btn.config(state='normal')
+            if hasattr(self.suit_view, 'refresh_btn'):
+                self.suit_view.refresh_btn.config(state='normal')
                 
         except Exception as e:
             logger.error(f"设置组套按钮编辑模式失败: {str(e)}")
@@ -644,15 +826,17 @@ class SuitViewFunc:
     def _set_suit_buttons_readonly_mode(self):
         """设置组套相关按钮为只读模式"""
         try:
-            # 这里可以根据实际的按钮控件名称进行调整
-            if hasattr(self.suit_view, 'btn_new_suit'):
-                self.suit_view.btn_new_suit.config(state='normal')
-            if hasattr(self.suit_view, 'btn_edit_suit'):
-                self.suit_view.btn_edit_suit.config(state='normal')
-            if hasattr(self.suit_view, 'btn_save_suit'):
-                self.suit_view.btn_save_suit.config(state='disabled')
-            if hasattr(self.suit_view, 'btn_delete_suit'):
-                self.suit_view.btn_delete_suit.config(state='disabled')
+            # 根据suit_view.py中的实际按钮名称设置状态
+            if hasattr(self.suit_view, 'new_btn'):
+                self.suit_view.new_btn.config(state='normal')
+            if hasattr(self.suit_view, 'edit_btn'):
+                self.suit_view.edit_btn.config(state='normal')
+            if hasattr(self.suit_view, 'save_btn'):
+                self.suit_view.save_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'delete_btn'):
+                self.suit_view.delete_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'refresh_btn'):
+                self.suit_view.refresh_btn.config(state='normal')
                 
         except Exception as e:
             logger.error(f"设置组套按钮只读模式失败: {str(e)}")
@@ -692,15 +876,17 @@ class SuitViewFunc:
     def _set_suit_buttons_default_mode(self):
         """设置组套相关按钮为默认模式"""
         try:
-            # 这里可以根据实际的按钮控件名称进行调整
-            if hasattr(self.suit_view, 'btn_new_suit'):
-                self.suit_view.btn_new_suit.config(state='normal')
-            if hasattr(self.suit_view, 'btn_edit_suit'):
-                self.suit_view.btn_edit_suit.config(state='disabled')
-            if hasattr(self.suit_view, 'btn_save_suit'):
-                self.suit_view.btn_save_suit.config(state='disabled')
-            if hasattr(self.suit_view, 'btn_delete_suit'):
-                self.suit_view.btn_delete_suit.config(state='disabled')
+            # 根据suit_view.py中的实际按钮名称设置状态
+            if hasattr(self.suit_view, 'new_btn'):
+                self.suit_view.new_btn.config(state='normal')
+            if hasattr(self.suit_view, 'edit_btn'):
+                self.suit_view.edit_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'save_btn'):
+                self.suit_view.save_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'delete_btn'):
+                self.suit_view.delete_btn.config(state='disabled')
+            if hasattr(self.suit_view, 'refresh_btn'):
+                self.suit_view.refresh_btn.config(state='normal')
                 
         except Exception as e:
             logger.error(f"设置组套按钮默认模式失败: {str(e)}")
@@ -1625,3 +1811,54 @@ class SuitViewFunc:
             return None
         finally:
             self._close_session()
+    
+    def show_mode_picker(self, root):
+        """显示模式选择器 - 参考home_tab.py中的show_mode_picker方法"""
+        def confirm_module():
+            self.relate_location_selected = local_mode_var.get()
+            select_mode.destroy()
+            return self.relate_location_selected
+            
+        select_mode = tk.Toplevel(root)
+        select_mode.title("选择模式")
+        select_mode.geometry("400x300")
+        select_mode.resizable(False, False)
+
+        select_mode.transient(root)
+        select_mode.grab_set()
+        select_mode.focus_set()
+
+        local_mode_frame = ttk.Frame(select_mode)
+        local_mode_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        local_mode_var = tk.IntVar()
+        
+        label_local = ttk.Label(local_mode_frame, text='选择插入位置:', font=("Arial", 12))
+        label_local.pack(pady=10)
+        
+        # 根据当前选中的节点类型显示不同的选项
+        selected = self.suit_view.suit_tree.selection()
+        if not selected:
+            messagebox.showwarning("警告", "请选择节点")
+            local_mode_var.set(5)
+            select_mode.destroy()
+            return
+        else:
+            selected_iid = selected[0]
+            if selected_iid.startswith("group_"):
+                ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
+                ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
+            elif selected_iid.startswith("A") and not selected_iid.endswith("E"):
+                ttk.Radiobutton(local_mode_frame, text="上方插入", variable=local_mode_var, value=1).pack(pady=5)
+                ttk.Radiobutton(local_mode_frame, text='下方插入', variable=local_mode_var, value=2).pack(pady=5)
+                ttk.Radiobutton(local_mode_frame, text ='插入子项', variable=local_mode_var, value=3).pack(pady=5)
+            else:
+                messagebox.showwarning("警告", "节点的内容出现错误，请修复")
+                local_mode_var.set(5)
+                select_mode.destroy()
+                return
+        self.relate_location_selected = None
+        confirm_btn = ttk.Button(local_mode_frame, text="确定", command=confirm_module)
+        confirm_btn.pack(pady=10)
+        root.wait_window(select_mode)
+            

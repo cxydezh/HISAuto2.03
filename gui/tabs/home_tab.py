@@ -889,8 +889,8 @@ class HomeTab(BaseTab):
         if self.relate_location_selected == None:
             return
         from utils.actionGroupHierarchyManager import ActionGroupHierarchy_Manager
-        #关闭窗口
-        ActionGroupHierarchy_Manager(self.my_window, self.action_group_selected_rank, self.relate_location_selected, self.hierarchy_sort)
+        #调用ActionGroupHierarchy_Manager方法，新建行为组组套
+        ActionGroupHierarchy_Manager(self.my_window, "ActionsGroupHierarchy", self.action_group_selected_rank, self.relate_location_selected, self.hierarchy_sort)
 
         #刷新行为组树
         self._refresh_action_group()
