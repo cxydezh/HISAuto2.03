@@ -1280,26 +1280,92 @@ class ActionGroupManager:
         self.home_tab = home_tab
         self._session = None
     
-    def _get_session(self):
-        """获取数据库会话"""
-        if not self._session:
-            try:
+    def _get_session(self, force_refresh=False):
+        """获取数据库会话
+        
+        Args:
+            force_refresh: 是否强制刷新session，用于数据库表结构更新后重新创建session
+            
+        Returns:
+            session: 数据库会话对象，失败时返回None
+        """
+        try:
+            # 如果需要强制刷新或session不存在，则创建新的session
+            if force_refresh or not self._session:
+                # 如果存在旧session，先关闭它
+                if self._session:
+                    try:
+                        self._session.close()
+                    except Exception as e:
+                        print(f"Warning: Error closing old session: {e}")
+                    self._session = None
+                
+                # 创建新的session
                 config = ConfigManager()
                 db_url = config.get_value('System', 'DataSource')
                 encryption_key = config.get_value('Security', 'DBEncryptionKey')
+                
+                if not db_url or not encryption_key:
+                    print("Error: Database configuration incomplete")
+                    return None
+                    
                 db_manager = DatabaseManager(db_url, encryption_key)
                 db_manager.initialize()
                 self._session = db_manager.Session()
-            except Exception as e:
-                print(f"Error getting database session: {e}")
-                return None
-        return self._session
+                
+                if force_refresh:
+                    print("Database session refreshed successfully")
+                    
+            return self._session
+            
+        except Exception as e:
+            print(f"Error getting database session: {e}")
+            # 如果创建session失败，清空缓存
+            self._session = None
+            return None
     
     def _close_session(self):
         """关闭数据库会话"""
         if self._session:
-            self._session.close()
+            try:
+                self._session.close()
+                self._session = None
+                print("Database session closed successfully")
+            except Exception as e:
+                print(f"Warning: Error closing session: {e}")
+                self._session = None
+    
+    def refresh_session(self):
+        """强制刷新数据库会话，用于数据库表结构更新后调用
+        
+        Returns:
+            bool: 刷新是否成功
+        """
+        try:
+            session = self._get_session(force_refresh=True)
+            return session is not None
+        except Exception as e:
+            print(f"Error refreshing session: {e}")
+            return False
+    
+    def is_session_valid(self):
+        """检查当前session是否有效
+        
+        Returns:
+            bool: session是否有效
+        """
+        if not self._session:
+            return False
+        
+        try:
+            # 尝试执行一个简单的查询来验证session是否有效
+            self._session.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            print(f"Session validation failed: {e}")
+            # session无效，清空缓存
             self._session = None
+            return False
     def get_current_class(self,class_action):
                     # 获取当前鼠标所在位置的应用信息
             
@@ -1336,7 +1402,13 @@ class ActionGroupManager:
 
     def get_action_group_data(self, group_id):
         """获取行为组数据"""
-        session = self._get_session()
+        # 首先检查session是否有效
+        if not self.is_session_valid():
+            # session无效，尝试刷新
+            if not self.refresh_session():
+                return None
+        
+        session = self._get_session(True)
         if not session:
             return None
             
@@ -1362,11 +1434,14 @@ class ActionGroupManager:
             }
         except Exception as e:
             print(f"Error getting action group data: {e}")
+            # 如果是session相关错误，尝试刷新session
+            if "session" in str(e).lower() or "connection" in str(e).lower():
+                self.refresh_session()
             return None
     
     def get_hierarchy_data(self, hierarchy_rank):
         """获取层级数据"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return None
             
@@ -1379,7 +1454,7 @@ class ActionGroupManager:
     
     def get_all_hierarchies(self):
         """获取所有行为组层级数据"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return []
             
@@ -1394,7 +1469,7 @@ class ActionGroupManager:
     
     def get_all_action_groups(self):
         """获取所有行为组数据"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return []
             
@@ -1407,7 +1482,7 @@ class ActionGroupManager:
     def run_action_group(self, group_id):
         """运行行为组"""
         self.group_id = group_id
-        session = self._get_session()
+        session = self._get_session(True)
         self.excel_value = None
         if not session:
             return False
@@ -1454,7 +1529,7 @@ class ActionGroupManager:
 
     def run_action(self, excel_value):
         """执行行为列表"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1517,7 +1592,7 @@ class ActionGroupManager:
 
     def run_mouse_action(self, action_id):
         """执行鼠标动作"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1569,7 +1644,7 @@ class ActionGroupManager:
 
     def run_keyboard_action(self, action_id):
         """执行键盘动作"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1608,7 +1683,7 @@ class ActionGroupManager:
 
     def run_class_action(self, action_id):
         """执行类动作"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1632,7 +1707,7 @@ class ActionGroupManager:
 
     def run_AI_action(self, action_id):
         """执行AI动作"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1654,7 +1729,7 @@ class ActionGroupManager:
 
     def run_image_action(self, action_id):
         """执行图像动作"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1787,7 +1862,7 @@ class ActionGroupManager:
 
     def run_code_action(self, action_id):
         """执行代码动作"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1810,7 +1885,7 @@ class ActionGroupManager:
 
     def run_function_action(self, action_id):
         """执行函数动作"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return False
             
@@ -1894,7 +1969,7 @@ class ActionGroupManager:
     
     def get_user_by_id(self, user_id):
         """根据用户ID获取用户信息"""
-        session = self._get_session()
+        session = self._get_session(True)
         if not session:
             return None
             
@@ -1907,7 +1982,13 @@ class ActionGroupManager:
     
     def get_hierarchy_by_id(self, hierarchy_id):
         """根据层级ID获取层级信息"""
-        session = self._get_session()
+        # 首先检查session是否有效
+        if not self.is_session_valid():
+            # session无效，尝试刷新
+            if not self.refresh_session():
+                return None
+        
+        session = self._get_session(True)
         if not session:
             return None
             
@@ -1916,4 +1997,38 @@ class ActionGroupManager:
             return hierarchy
         except Exception as e:
             print(f"Error getting hierarchy by id: {e}")
+            # 如果是session相关错误，尝试刷新session
+            if "session" in str(e).lower() or "connection" in str(e).lower():
+                self.refresh_session()
             return None
+    
+    def handle_database_schema_update(self):
+        """处理数据库表结构更新后的操作
+        
+        当数据库表结构发生变化时，调用此方法可以：
+        1. 强制刷新session以获取最新的表结构
+        2. 清理可能存在的缓存数据
+        3. 重新初始化相关组件
+        
+        Returns:
+            bool: 操作是否成功
+        """
+        try:
+            print("Handling database schema update...")
+            
+            # 强制刷新session
+            if not self.refresh_session():
+                print("Failed to refresh session after schema update")
+                return False
+            
+            # 验证新session是否有效
+            if not self.is_session_valid():
+                print("New session is not valid after schema update")
+                return False
+            
+            print("Database schema update handled successfully")
+            return True
+            
+        except Exception as e:
+            print(f"Error handling database schema update: {e}")
+            return False
