@@ -1453,19 +1453,96 @@ class ActionGroupManager:
             return None
     
     def get_all_hierarchies(self):
-        """获取所有行为组层级数据"""
+        """获取所有行为组层级数据
+        
+        排序规则：
+        1. 先按照父节点分组（相同父节点的记录归为一组）
+        2. 在每个父节点组内按照sort_num排序
+        
+        Returns:
+            list: 排序后的层级数据列表
+        """
         session = self._get_session(True)
         if not session:
             return []
             
         try:
-            hierarchies = session.query(ActionsGroupHierarchy).order_by(
-                ActionsGroupHierarchy.sort_num, ActionsGroupHierarchy.group_rank
-            ).all()
-            return hierarchies
+            # 获取所有层级数据
+            hierarchies = session.query(ActionsGroupHierarchy).all()
+            
+            # 按照父节点分组，然后在每组内按sort_num排序
+            sorted_hierarchies = self._sort_hierarchies_by_parent_and_sort(hierarchies)
+            
+            return sorted_hierarchies
         except Exception as e:
             print(f"Error getting all hierarchies: {e}")
             return []
+    
+    def _sort_hierarchies_by_parent_and_sort(self, hierarchies):
+        """按照父节点分组，然后在每组内按sort_num排序
+        
+        Args:
+            hierarchies: 层级数据列表
+            
+        Returns:
+            list: 排序后的层级数据列表
+        """
+        try:
+            # 解析每个层级的父节点
+            hierarchy_groups = {}
+            
+            for hierarchy in hierarchies:
+                rank_dict = parse_group_rank(hierarchy.group_rank)
+                parent_key = self._get_parent_key(rank_dict)
+                
+                if parent_key not in hierarchy_groups:
+                    hierarchy_groups[parent_key] = []
+                
+                hierarchy_groups[parent_key].append(hierarchy)
+            
+            # 对每个父节点组内的记录按sort_num排序
+            for parent_key in hierarchy_groups:
+                hierarchy_groups[parent_key].sort(key=lambda x: x.sort_num)
+            
+            # 按照父节点key排序，然后合并所有组
+            sorted_parent_keys = sorted(hierarchy_groups.keys())
+            sorted_hierarchies = []
+            
+            for parent_key in sorted_parent_keys:
+                sorted_hierarchies.extend(hierarchy_groups[parent_key])
+            
+            return sorted_hierarchies
+            
+        except Exception as e:
+            print(f"Error sorting hierarchies: {e}")
+            # 如果排序失败，返回原始列表
+            return hierarchies
+    
+    def _get_parent_key(self, rank_dict):
+        """获取父节点key
+        
+        Args:
+            rank_dict: 解析后的group_rank字典
+            
+        Returns:
+            str: 父节点key
+        """
+        # 根据层级确定父节点
+        if rank_dict['E'] > 0:
+            # E有值，父节点是D
+            return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}"
+        elif rank_dict['D'] > 0:
+            # D有值，父节点是C
+            return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}"
+        elif rank_dict['C'] > 0:
+            # C有值，父节点是B
+            return f"A{rank_dict['A']}B{rank_dict['B']}"
+        elif rank_dict['B'] > 0:
+            # B有值，父节点是A
+            return f"A{rank_dict['A']}"
+        else:
+            # A有值，这是顶级节点
+            return f"A{rank_dict['A']}"
     
     def get_all_action_groups(self):
         """获取所有行为组数据"""
