@@ -23,7 +23,7 @@ import globalvariable
 from utils.logger import Logger,logger
 from utils.screenshot_tool import ScreenshotTool
 from core.pic_capture import PicCapture
-
+from utils.hometab_funcdata import hometab_funcData
 # 移除循环导入
 # from gui.tabs.Hierarchyutils import iid_to_group_rank
 
@@ -125,6 +125,13 @@ class home_tab_action_group_func:
                 session = self._get_session()
                 if not session:
                     return False
+                #获取最大的sort_num
+                max_sort_num = 0
+                groups = session.query(ActionGroup).filter_by(group_rank_id=self.action_group_hierarchy_id).all()
+                if groups:
+                    for group_item in groups:
+                        if group_item.sort_num > max_sort_num:
+                            max_sort_num = group_item.sort_num
                 #生成新增行为组记录
                 new_action_group = ActionGroup(
                     action_list_group_name=self.group_name,
@@ -135,7 +142,7 @@ class home_tab_action_group_func:
                     department_id=self.group_department_id,
                     created_at=datetime.now(), 
                     group_rank_id=self.action_group_hierarchy_id,
-                    sort_num=self.sort_num,
+                    sort_num=max_sort_num + 1,
                 )
                 session.add(new_action_group)
                 session.commit()
@@ -194,55 +201,14 @@ class home_tab_action_group_func:
         """删除行为组"""
         session = None
         try:
-            #获取数据库会话
-            session = self._get_session()
-            if not session:
-                return False
-                
-            #如果选中的是来源于Action_list_group表
-            if self.action_tree_selected_iid.startswith("group_"):
-                #删除action_list_group表的记录
-                group = session.query(ActionGroup).filter_by(id=self.action_group_id).first()
-                if group:
-                    group_name = group.action_list_group_name
-                    session.delete(group)
-                    session.commit()
-                    logger.info(f"成功删除行为组: {group_name}")
-                    #删除行为组关联的行为元
-                    actions = session.query(ActionList).filter_by(group_id=self.action_group_id).all()
-                    for action in actions:
-                        #删除行为元关联的子行为元
-                        self._delete_action(session,action.id,action.action_type)
-                        session.delete(action)
-                        session.commit()
-                    return True
-                else:
-                    logger.error(f"无法找到行为组记录: {self.action_group_id}")
-                    return False
-            elif self.action_tree_selected_iid.startswith("A"):
-                #删除ActionsGroupHierarchy表的记录
-                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=self.action_group_hierarchy_id).first()
-                if hierarchy:
-                    hierarchy_name = hierarchy.group_name
-                    session.delete(hierarchy)
-                    session.commit()
-                    logger.info(f"成功删除行为组层次: {hierarchy_name}")
-                    return True
-                else:
-                    logger.error(f"无法找到行为组层次记录: {self.action_group_hierarchy_id}")
-                    return False
-            else:   
-                logger.error(f"无效的行为组类型: {self.action_tree_selected_iid}")
-                return False
+            hometab_funcData.delete_action_group(sheet_type="Action",action_tree_selected_iid=self.action_tree_selected_iid,action_group_id=self.action_group_id,action_group_hierarchy_id=self.action_group_hierarchy_id)
+            return True
         except Exception as e:
             if session:
                 session.rollback()
             print(traceback.format_exc())
             logger.error(f"删除行为组失败: {str(e)}")
             return False
-        finally:
-            if session and session != self.session:
-                session.close()
 
     def _session_close(self):
         """关闭数据库会话"""
@@ -258,50 +224,51 @@ class home_tab_action_group_func:
     def _capture_image(self):
         """图像采集"""
         messagebox.showinfo("提示", "图像采集功能待实现")
-    def _delete_action(self,session,action_list_id,action_type:str):
+        
+    def _delete_action(self, session, action_list_id, action_type):
         """删除子行为元"""
         try:
-            mysession = session
-            if not mysession:
+            if not session:
                 return False
         except Exception as e:
             logger.error(f"删除子行为元失败: {str(e)}")
             return False
+            
         if action_type == 'mouse':
-            action = mysession.query(ActionMouse).filter_by(id=action_list_id).first()
+            action = session.query(ActionMouse).filter_by(id=action_list_id).first()
             if action:
-                mysession.delete(action)
-                mysession.commit()
+                session.delete(action)
+                session.commit()
         elif action_type == 'keyboard': 
-            action = mysession.query(ActionKeyboard).filter_by(id=action_list_id).first()
+            action = session.query(ActionKeyboard).filter_by(id=action_list_id).first()
             if action:
-                mysession.delete(action)
-                mysession.commit()
+                session.delete(action)
+                session.commit()
         elif action_type == 'code_text':
-            action = mysession.query(ActionCodeTxt).filter_by(id=action_list_id).first()
+            action = session.query(ActionCodeTxt).filter_by(id=action_list_id).first()
             if action:
-                mysession.delete(action)
-                mysession.commit()
+                session.delete(action)
+                session.commit()
         elif action_type == 'printscreen':
-            action = mysession.query(ActionPrintscreen).filter_by(id=action_list_id).first()  
+            action = session.query(ActionPrintscreen).filter_by(id=action_list_id).first()  
             if action:
-                mysession.delete(action)
-                mysession.commit()
+                session.delete(action)
+                session.commit()
         elif action_type == 'ai':
-            action = mysession.query(ActionAI).filter_by(id=action_list_id).first()
+            action = session.query(ActionAI).filter_by(id=action_list_id).first()
             if action:      
-                mysession.delete(action)
-                mysession.commit()
+                session.delete(action)
+                session.commit()
         elif action_type == 'function':
-            action = mysession.query(ActionFunction).filter_by(id=action_list_id).first()
+            action = session.query(ActionFunction).filter_by(id=action_list_id).first()
             if action:
-                mysession.delete(action)
-                mysession.commit()
+                session.delete(action)
+                session.commit()
         elif action_type == 'class':
-            action = mysession.query(ActionClass).filter_by(id=action_list_id).first()
+            action = session.query(ActionClass).filter_by(id=action_list_id).first()
             if action:
-                mysession.delete(action)
-                mysession.commit()    
+                session.delete(action)
+                session.commit()    
         return True
 def _home_capture_image(action_group_id: int, master: tk.Tk):
     """图像采集
@@ -403,69 +370,6 @@ def _home_capture_image(action_group_id: int, master: tk.Tk):
         messagebox.showerror("错误", f"图像采集失败: {str(e)}")
         return False
 
-def _home_delete_action_group(action_group_id:int):
-    """删除行为组
-    
-    Args:
-        action_group_id: 行为组ID
-        
-    Returns:
-        bool: 操作是否成功
-    """
-    try:
-        if not action_group_id:
-            messagebox.showwarning("警告", "无效的行为组ID")
-            return False
-            
-        if messagebox.askyesno("确认", "确定要删除这个行为组吗？"):
-            # 这里应该实现删除行为组的具体逻辑
-            # 需要先删除关联的行为元，再删除行为组
-            
-            from models.actions import ActionGroup, ActionList
-            from database.db_manager import DatabaseManager
-            from config.config_manager import ConfigManager
-            
-            config = ConfigManager()
-            db_path = config.get_value('System', 'DataSource')
-            encryption_key = config.get_value('Security', 'DBEncryptionKey')
-            
-            if not db_path or not encryption_key:
-                messagebox.showerror("错误", "数据库配置信息不完整")
-                return False
-                
-            db_manager = DatabaseManager(db_path, encryption_key)
-            db_manager.initialize()
-            session = db_manager.Session()
-            
-            try:
-                # 先删除关联的行为元
-                actions = session.query(ActionList).filter_by(group_id=action_group_id).all()
-                for action in actions:
-                    session.delete(action)
-                
-                # 删除行为组
-                group = session.query(ActionGroup).filter_by(id=action_group_id).first()
-                if group:
-                    group_name = group.action_list_group_name
-                    session.delete(group)
-                    session.commit()
-                    messagebox.showinfo("成功", f"行为组 '{group_name}' 删除成功")
-                    return True
-                else:
-                    messagebox.showerror("错误", "未找到要删除的行为组")
-                    return False
-                    
-            except Exception as e:
-                session.rollback()
-                raise e
-            finally:
-                session.close()
-        
-        return False
-    except Exception as e:
-        logger.error(f"删除行为组失败: {str(e)}")
-        messagebox.showerror("错误", f"删除行为组失败: {str(e)}")
-        return False
     
 class ActionManager:
     """行为元管理器，用于处理middle_panel中行为元相关的按钮功能"""
@@ -1313,9 +1217,6 @@ class ActionGroupManager:
                 db_manager.initialize()
                 self._session = db_manager.Session()
                 
-                if force_refresh:
-                    print("Database session refreshed successfully")
-                    
             return self._session
             
         except Exception as e:
@@ -1492,7 +1393,7 @@ class ActionGroupManager:
             hierarchy_groups = {}
             
             for hierarchy in hierarchies:
-                rank_dict = parse_group_rank(hierarchy.group_rank)
+                rank_dict = parse_group_rank(hierarchy.group_rank)#解析group_rank字典
                 parent_key = self._get_parent_key(rank_dict)
                 
                 if parent_key not in hierarchy_groups:
@@ -1525,7 +1426,7 @@ class ActionGroupManager:
             rank_dict: 解析后的group_rank字典
             
         Returns:
-            str: 父节点key
+            str: 父节点key,也就是iid
         """
         # 根据层级确定父节点
         if rank_dict['E'] > 0:

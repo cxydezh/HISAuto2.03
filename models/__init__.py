@@ -13,7 +13,7 @@ from models.action_suit import (
 )
 from models.debug_actions import (
     ActionDebugMouse, ActionDebugKeyboard, ActionDebugCodeTxt,
-    ActionDebugPrintscreen, ActionDebugFunction, ActionDebugClass,
+    ActionDebugPrintscreen, ActionDebugAI, ActionDebugFunction, ActionDebugClass,
     ActionDebugList, ActionsDebugGroup, ActionsDebugGroupHierarchy
 )
 from models.department import Department
@@ -50,6 +50,7 @@ __all__ = [
     'ActionDebugKeyboard',
     'ActionDebugCodeTxt',
     'ActionDebugPrintscreen',
+    'ActionDebugAI',
     'ActionDebugFunction',
     'ActionDebugClass',
     'ActionDebugList',

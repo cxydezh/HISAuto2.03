@@ -137,6 +137,26 @@ class ActionDebugFunction(BaseModel):
         return action
     # 关系
     action_list = relationship("ActionDebugList", back_populates="function_actions")
+class ActionDebugAI(BaseModel):
+    """DebugAI模型的行为操作表"""
+    __tablename__ = 'action_debug_ai'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
+    train_group_name = Column(String(200))  # 训练库名称
+    train_long_name = Column(String(200))  # 记录名称
+    long_txt_name = Column(String(200))  # 长文本名称
+    ai_illustration = Column(String(1000))  # AI网页输入框输入的文本内容
+    ai_note = Column(String(500))  # 备注信息
+    time_diff = Column(Float)  # 与上一个动作的时间差
+    action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
+
+    # 关系
+    action_list = relationship("ActionDebugList", back_populates="ai_actions")
+
+    def get_action_by_group_id(group_id, action_name):
+        return ActionDebugAI.query.filter_by(id=group_id, action_name=action_name).first()
+    def __repr__(self):
+        return f"<ActionDebugAI(id={self.id}, action_list_id={self.action_list_id})>"
 
 class ActionDebugClass(BaseModel):
     """Debug检验列表_类"""
@@ -182,6 +202,7 @@ class ActionDebugList(BaseModel):
     keyboard_actions = relationship("ActionDebugKeyboard", back_populates="action_list")
     code_text_actions = relationship("ActionDebugCodeTxt", back_populates="action_list")
     printscreen_actions = relationship("ActionDebugPrintscreen", back_populates="action_list")
+    ai_actions = relationship("ActionDebugAI", back_populates="action_list")
     function_actions = relationship("ActionDebugFunction", back_populates="action_list")
     class_actions = relationship("ActionDebugClass", back_populates="action_list")
     debug_group = relationship("ActionsDebugGroup", back_populates="action_lists", foreign_keys=[group_id])

@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import traceback
 from typing import Optional, Callable
 
 from gui.main_window import MainWindow
@@ -113,6 +114,7 @@ class LoginWindow:
                     messagebox.showerror("登录失败", f"登录失败！还剩 {remaining} 次尝试机会。")
         except Exception as e:
             logger.info(f"登录失败: {str(e)}")
+            print(traceback.format_exc())
             messagebox.showerror("登录失败", f"登录失败: {str(e)}")
             
     def _handle_register(self):

@@ -104,26 +104,29 @@ class SuitView(tk.Toplevel):
         #这里参考了home_tab.py中的self.action_tree的右键菜单
         self.tree_context_menu = tk.Menu(self.suit_tree, tearoff=0)
         self.tree_context_menu.add_command(label="新建组", command=self.suit_func.new_suit_group)
-        self.tree_context_menu.add_command(label="编辑", command=self.suit_func.edit_suit)
-        self.tree_context_menu.add_command(label="删除", command=self.suit_func.delete_suit)
+        self.tree_context_menu.add_command(label="排序↑", command=self.suit_func.sort_up_suit)
+        self.tree_context_menu.add_command(label="排序↓", command=self.suit_func.sort_down_suit)
         self.tree_context_menu.add_command(label="刷新", command=self.suit_func.refresh_data)
         self.tree_context_menu.add_command(label="保存", command=self.suit_func.save_suit)
         # 创建按钮，参考home_tab.py中的self.action_tree的右键菜单
-        self.new_btn = ttk.Button(button_frame, text="新建", command=self.suit_func.new_suit)
+        self.new_btn = ttk.Button(button_frame, text="新建", command=self.suit_func.new_suit,state="disabled")
         self.new_btn.pack(side=tk.LEFT, padx=5)
         
-        self.edit_btn = ttk.Button(button_frame, text="编辑", command=self.suit_func.edit_suit)
+        self.edit_btn = ttk.Button(button_frame, text="编辑", command=self.suit_func.edit_suit,state="disabled")
         self.edit_btn.pack(side=tk.LEFT, padx=5)
         
-        self.delete_btn = ttk.Button(button_frame, text="删除", command=self.suit_func.delete_suit)
+        self.delete_btn = ttk.Button(button_frame, text="删除", command=self.suit_func.delete_suit,state="disabled")
         self.delete_btn.pack(side=tk.LEFT, padx=5)
         
         self.refresh_btn = ttk.Button(button_frame, text="刷新", command=self.suit_func.refresh_data)
         self.refresh_btn.pack(side=tk.LEFT, padx=5)
         
-        self.save_btn = ttk.Button(button_frame, text="保存", command=self.suit_func.save_suit)
+        self.save_btn = ttk.Button(button_frame, text="保存", command=self.suit_func.save_suit,state="disabled" )
         self.save_btn.pack(side=tk.LEFT, padx=5)
-        
+
+        self.import_btn = ttk.Button(button_frame, text="导入", command=self.suit_func.import_suit,state="disabled")
+        self.import_btn.pack(side=tk.LEFT, padx=5)
+
     def create_detail_area(self):
         """创建详细信息显示区域"""
         detail_frame = ttk.LabelFrame(self.main_frame, text="详细信息")

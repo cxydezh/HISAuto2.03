@@ -90,8 +90,8 @@ class ActionGroupHierarchy_Manager:
                 #将first_key_ascii减1，但要确保不超出有效范围
                 first_key_ascii -= 1
                 #检查是否超出有效范围（A=65, B=66, C=67, D=68, E=69）
-                if first_key_ascii < 66:  # 如果小于'A'的ASCII码
-                    first_key_ascii = 66  # 设置为'A'
+                if first_key_ascii < 66:  # 如果小于'B'的ASCII码
+                    first_key_ascii = 66  # 设置为'B'
                 #将first_key_ascii转换为字符
                 pro_first_key = chr(first_key_ascii)
                 #获取group_rank_dict中pro_first_key之前的所有的key和Value组成的字符串
@@ -110,6 +110,8 @@ class ActionGroupHierarchy_Manager:
                 max_first_key_value = 0
                 for record in action_group_hierarchy_records:
                     temp_group_rank_dict = parse_group_rank(record.group_rank)
+                    if temp_group_rank_dict[first_key] == 0:
+                        continue
                     # 安全检查：确保键存在于字典中
                     if (pro_first_key in temp_group_rank_dict and 
                         first_key in temp_group_rank_dict and 
@@ -171,6 +173,9 @@ class ActionGroupHierarchy_Manager:
                     #修改action_group_hierarchy_records的sort_num值，使sort_num值大于self.hierarchy_sort+1值均加1
                 max_first_key_value = 0
                 for record in action_group_hierarchy_records:
+                    record_rank_dict = parse_group_rank(record.group_rank)
+                    if record_rank_dict[first_key] == 0:
+                        continue
                     temp_group_rank_dict = parse_group_rank(record.group_rank)
                     # 安全检查：确保键存在于字典中
                     if (pro_first_key in temp_group_rank_dict and 
@@ -206,22 +211,22 @@ class ActionGroupHierarchy_Manager:
                 #获取group_rank_dict的第一个Value为0的key值
                 first_key = ""
                 for key, value in group_rank_dict.items():
-                    if value == 0:
+                    if value == 0 and key != "A":
                         first_key = key
                         break
                 #获取group_rank_dict中first_key的ascii码
                 first_key_ascii = ord(first_key)
-                #将first_key_ascii加1，但要确保不超出有效范围
-                first_key_ascii += 1
                 #检查是否超出有效范围（A=65, B=66, C=67, D=68, E=69）
-                if first_key_ascii > 69:  # 如果大于'E'的ASCII码
+                if first_key_ascii > 68:  # 如果大于'E'的ASCII码
                     first_key_ascii = 69  # 设置为'E'
+                    return False
                 #将first_key_ascii转换为字符
-                next_first_key = chr(first_key_ascii)
+                first_key = chr(first_key_ascii)
+                next_first_key = chr(first_key_ascii + 1)
                 #获取group_rank_dict中next_first_key之前的所有的key和Value组成的字符串
                 group_rank_str = ""
                 for key, value in group_rank_dict.items():
-                    if key < next_first_key:
+                    if key < first_key:
                         group_rank_str += key + str(value)
                 #获取数据库self.handle_sheet表中group_rank包含group_rank_str的所有记录
                 if self.handle_sheet == "ActionsGroupHierarchy":
@@ -235,6 +240,8 @@ class ActionGroupHierarchy_Manager:
                 max_sort_num = 0
                 for record in action_group_hierarchy_records:
                     temp_group_rank_dict = parse_group_rank(record.group_rank)
+                    if temp_group_rank_dict[next_first_key] == 0:
+                        continue
                     # 安全检查：确保键存在于字典中
                     if (first_key in temp_group_rank_dict and 
                         next_first_key in temp_group_rank_dict and

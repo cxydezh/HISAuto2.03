@@ -15,6 +15,7 @@ import win32gui
 import win32api
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
+from gui.tabs.home_tab import prevent_double_click
 from models.action_suit import (
     ActionsSuitGroup, ActionsSuitList, ActionsSuitGroupHierarchy,
     ActionSuitMouse, ActionSuitKeyboard, ActionSuitClass, ActionSuitAI, 
@@ -183,7 +184,7 @@ class SuitViewFunc:
                         # 插入组套节点
                         self.suit_view.suit_tree.insert(parent_iid, "end", text="📄", 
                                                       values=(group.action_list_group_name, username), 
-                                                      iid=f"suit_{group.id}")
+                                                      iid=f"group_{group.id}")
                     else: 
                         logger.error(f"父节点 {parent_iid} 不存在")
                 except Exception as e:
@@ -265,7 +266,7 @@ class SuitViewFunc:
                 return
             
             selected_iid = selected[0]
-            if selected_iid.startswith("suit_"):
+            if selected_iid.startswith("group_"):
                 messagebox.showinfo("提示", "请选择层次节点，而不是组套节点")
                 return
             
@@ -295,7 +296,49 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"新建组套组失败: {str(e)}")
             messagebox.showerror("错误", f"新建组套组失败: {str(e)}")
-    
+    @prevent_double_click(interval=0.5)
+    def sort_up_suit(self):
+        """排序↑ - 参考home_tab.py中的_sort_action_group_up方法"""
+        try:
+            selected = self.suit_view.suit_tree.selection()
+            if not selected:
+                messagebox.showinfo("提示", "请先选择组套")
+                return
+            iid = selected[0]
+            parent = self.suit_view.suit_tree.parent(iid)
+            if not parent:
+                return
+            #获取同级所有项
+            siblings = self.suit_view.suit_tree.get_children(parent)
+            current_index = siblings.index(iid)
+            if current_index > 0:
+                #移动项
+                self.suit_view.suit_tree.move(iid, parent, current_index - 1)
+        except Exception as e:
+            logger.error(f"排序↑失败: {str(e)}")
+            messagebox.showerror("错误", f"排序↑失败: {str(e)}")
+    @prevent_double_click(interval=0.5)
+    def sort_down_suit(self):
+        """排序↓ - 参考home_tab.py中的_sort_down_action_group方法"""
+        try:
+            selected = self.suit_view.suit_tree.selection()
+            if not selected:
+                messagebox.showinfo("提示", "请先选择组套")
+                return
+            iid = selected[0]
+            parent = self.suit_view.suit_tree.parent(iid)
+            if not parent:
+                return
+            #获取同级所有项
+            siblings = self.suit_view.suit_tree.get_children(parent)
+            current_index = siblings.index(iid)
+            if current_index < len(siblings) - 1:
+                #移动项
+                self.suit_view.suit_tree.move(iid, parent, current_index + 1)
+        except Exception as e:
+            logger.error(f"排序↓失败: {str(e)}")
+            messagebox.showerror("错误", f"排序↓失败: {str(e)}")
+    @prevent_double_click(interval=0.5)
     def new_suit(self):
         """新建组套 - 参考home_tab.py中的_new_action_group方法"""
         try:
@@ -308,18 +351,14 @@ class SuitViewFunc:
             iid = selected[0]
             
             # 检查选中的是否是层次节点（不是组套节点）
-            if iid.startswith("suit_"):
+            if iid.startswith("group_"):
                 messagebox.showwarning("提示", "请选择层次节点，而不是组套节点")
                 return
             
             if iid in ("A0", "A1", "A2"):
                 messagebox.showwarning("提示", "请选择具体的层次节点")
                 return
-            
-            # 保存选中的层次信息
-            self.suit_group_hierarchy_tree_iid = iid
-            self.suit_group_selected_rank = iid
-            
+                        
             # 获取层次ID
             hierarchy = self._get_hierarchy_by_iid(iid)
             if not hierarchy:
@@ -347,7 +386,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"新建组套失败: {str(e)}")
             messagebox.showerror("错误", f"新建组套失败: {str(e)}")
-    
+    @prevent_double_click(interval=0.5)
     def _set_suit_form_new_mode(self):
         """设置组套表单为新建模式"""
         try:
@@ -361,6 +400,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置组套表单新建模式失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _set_suit_buttons_new_mode(self):
         """设置组套相关按钮为新建模式"""
         try:
@@ -395,6 +435,7 @@ class SuitViewFunc:
         finally:
             self._close_session()
     
+    @prevent_double_click(interval=0.5)
     def edit_suit(self):
         """编辑组套 - 参考home_tab.py中的_edit_action_group方法"""
         try:
@@ -407,7 +448,7 @@ class SuitViewFunc:
             iid = selected[0]
             
             # 检查选中的是否是组套节点
-            if not iid.startswith("suit_"):
+            if not iid.startswith("group_"):
                 messagebox.showwarning("提示", "请选择组套节点进行编辑")
                 return
             
@@ -431,69 +472,13 @@ class SuitViewFunc:
             logger.error(f"编辑组套失败: {str(e)}")
             messagebox.showerror("错误", f"编辑组套失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def delete_suit(self):
         """删除组套 - 参考home_tab.py中的_delete_action_group方法"""
-        try:
-            selected = self.suit_view.suit_tree.selection()
-            if not selected:
-                messagebox.showwarning("警告", "请先选择要删除的组套")
-                return
-            
-            iid = selected[0]
-            
-            # 检查选中的是否是组套节点
-            if not iid.startswith("suit_"):
-                messagebox.showwarning("提示", "请选择组套节点进行删除")
-                return
-            
-            # 获取组套ID
-            suit_id = int(iid.split("_")[1])
-            
-            # 保存组套ID
-            self.suit_group_id = suit_id
-            
-            # 获取组套信息用于确认
-            session = self._get_session()
-            if not session:
-                return False
-            
-            group = session.query(ActionsSuitGroup).filter_by(id=suit_id).first()
-            if not group:
-                messagebox.showerror("错误", "未找到要删除的组套")
-                return
-            
-            # 确认删除
-            if not messagebox.askyesno("确认", f"确定要删除组套 '{group.action_list_group_name}' 吗？\n此操作将同时删除该组套下的所有行为元，且不可恢复。"):
-                return
-            
-            # 设置操作类型为删除
-            self.suit_group_action_type = 3
-            
-            # 删除组套下的所有行为
-            actions = session.query(ActionsSuitList).filter_by(group_id=suit_id).all()
-            for action in actions:
-                # 删除行为详细信息
-                self._delete_action_detail(session, action.id, action.action_type)
-                # 删除行为本身
-                session.delete(action)
-            
-            # 删除组套
-            session.delete(group)
-            session.commit()
-            
-            messagebox.showinfo("成功", f"组套 '{group.action_list_group_name}' 删除成功")
-            logger.info(f"组套删除成功: {group.action_list_group_name}")
-            
-            # 刷新数据
-            self.refresh_data()
-            # 清空当前选中的组套信息
-            self._clear_suit_info()
-                
-        except Exception as e:
-            logger.error(f"删除组套失败: {str(e)}")
-            messagebox.showerror("错误", f"删除组套失败: {str(e)}")
-        finally:
-            self._close_session()
+        from utils.hometab_funcdata import hometab_funcData
+        hometab_funcData.delete_action_group(sheet_type="Action_suit",action_tree_selected_iid=self.suit_group_hierarchy_tree_iid,action_group_id=self.suit_group_id,action_group_hierarchy_id=self.suit_group_hierarchy_id)
+        self.refresh_data()
+        return True
     
     def _clear_suit_info(self):
         """清空组套信息 - 参考home_tab.py中的_clear_action_group_info方法"""
@@ -518,6 +503,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"清空组套信息失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def capture_image(self):
         """图像采集 - 参考home_tab.py中的_capture_image方法"""
         try:
@@ -580,6 +566,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"删除行为详细信息失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def save_suit(self):
         """保存组套 - 参考home_tab.py中的_save_action_group方法"""
         try:
@@ -654,7 +641,15 @@ class SuitViewFunc:
             messagebox.showerror("错误", f"保存组套失败: {str(e)}")
         finally:
             self._close_session()
-    
+    @prevent_double_click(interval=0.5)
+    def import_suit(self):
+        """导入组套 - 参考home_tab.py中的_import_action_group方法"""
+        try:
+            pass
+        except Exception as e:
+            logger.error(f"导入组套失败: {str(e)}")
+            messagebox.showerror("错误", f"导入组套失败: {str(e)}")
+    @prevent_double_click(interval=0.5)
     def _reset_suit_interface(self):
         """重置组套界面状态 - 参考home_tab.py中的_reset_action_group_interface方法"""
         try:
@@ -676,6 +671,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"重置组套界面状态失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def load_suit_data(self, suit_id):
         """加载组套数据到表单:这里参考home_tab.py中的_refresh_action_group方法"""
         try:
@@ -698,15 +694,16 @@ class SuitViewFunc:
                 self.suit_view.suit_note.insert("1.0", group.action_list_group_note or "")
                 
                 # 保存当前组套ID和相关信息
-                self.current_suit_id = suit_id
+                self.suit_group_id = suit_id
                 self.current_hierarchy_id = group.group_rank_id
-                
+                self.sort_num = group.sort_num
                 # 获取组套对应的层次信息
                 if group.group_rank_id:
                     hierarchy = session.query(ActionsSuitGroupHierarchy).filter_by(id=group.group_rank_id).first()
                     if hierarchy:
                         self.suit_group_hierarchy_rank = hierarchy.group_rank
                         self.suit_group_hierarchy_id = hierarchy.id
+                        self.sort_num = hierarchy.sort_num
                 
                 # 设置表单为编辑模式
                 self._set_suit_form_edit_mode()
@@ -731,6 +728,7 @@ class SuitViewFunc:
         finally:
             self._close_session()
     
+    @prevent_double_click(interval=0.5)
     def _set_suit_form_edit_mode(self):
         """设置组套表单为编辑模式"""
         try:
@@ -744,6 +742,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置组套表单编辑模式失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _set_suit_buttons_edit_mode(self):
         """设置组套相关按钮为编辑模式"""
         try:
@@ -762,6 +761,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置组套按钮编辑模式失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def load_hierarchy_data(self, hierarchy_id):
         """加载层次数据到表单"""
         try:
@@ -786,8 +786,7 @@ class SuitViewFunc:
                 # 保存层次信息
                 self.suit_group_hierarchy_id = hierarchy_id
                 self.suit_group_hierarchy_rank = hierarchy.group_rank
-                self.current_suit_id = None
-                
+                self.sort_num = None
                 # 设置表单为只读模式
                 self._set_suit_form_readonly_mode()
                 
@@ -810,6 +809,7 @@ class SuitViewFunc:
         finally:
             self._close_session()
     
+    @prevent_double_click(interval=0.5)
     def _set_suit_form_readonly_mode(self):
         """设置组套表单为只读模式"""
         try:
@@ -823,6 +823,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置组套表单只读模式失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _set_suit_buttons_readonly_mode(self):
         """设置组套相关按钮为只读模式"""
         try:
@@ -841,6 +842,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置组套按钮只读模式失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def clear_suit_form(self):
         """清空组套表单 - 参考home_tab.py中的_clear_action_group_info方法"""
         try:
@@ -873,6 +875,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"清空组套表单失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _set_suit_buttons_default_mode(self):
         """设置组套相关按钮为默认模式"""
         try:
@@ -918,6 +921,7 @@ class SuitViewFunc:
             logger.error(f"刷新数据失败: {str(e)}")
             messagebox.showerror("错误", f"刷新数据失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def on_suit_select(self, event):
         """组套选择事件处理 - 参考home_tab.py中的_on_action_tree_select方法"""
         try:
@@ -926,8 +930,7 @@ class SuitViewFunc:
                 return
             
             iid = selected[0]
-            self.suit_tree_selected_iid = iid
-            
+            self.suit_group_hierarchy_tree_iid = iid
             # 清空行为列表
             for item in self.suit_view.action_list.get_children():
                 self.suit_view.action_list.delete(item)
@@ -942,7 +945,7 @@ class SuitViewFunc:
                 return
             
             try:
-                if iid.startswith("suit_"):
+                if iid.startswith("group_"):
                     # 选中的是组套（ActionsSuitGroup）
                     suit_id = int(iid.split("_")[1])
                     
@@ -956,7 +959,6 @@ class SuitViewFunc:
                     # 选中的是组套层次（ActionsSuitGroupHierarchy）
                     selected_group_rank = iid_to_group_rank(iid)
                     self.suit_group_hierarchy_rank = selected_group_rank
-                    
                     # 获取层次数据
                     session = self._get_session()
                     if not session:
@@ -965,6 +967,10 @@ class SuitViewFunc:
                     hierarchy = session.query(ActionsSuitGroupHierarchy).filter_by(group_rank=selected_group_rank).first()
                     if hierarchy:
                         # 使用改进的load_hierarchy_data方法加载层次数据
+                        self.sort_num = hierarchy.sort_num
+                        self.suit_group_hierarchy_id = hierarchy.id
+                        self.suit_group_id = None
+
                         if self.load_hierarchy_data(hierarchy.id):
                             logger.info(f"成功选择层次: {hierarchy.group_name}")
                         else:
@@ -1010,6 +1016,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置行为控件状态失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def on_action_select(self, event):
         """行为选择事件处理 - 参考home_tab.py中的_on_action_list_select方法"""
         try:
@@ -1031,6 +1038,7 @@ class SuitViewFunc:
             logger.error(f"行为选择事件处理失败: {str(e)}")
             messagebox.showerror("错误", f"行为选择事件处理失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def load_action_data(self, action_id):
         """加载行为数据到表单 - 参考home_tab.py中的_fill_action_data方法"""
         try:
@@ -1074,6 +1082,7 @@ class SuitViewFunc:
         finally:
             self._close_session()
     
+    @prevent_double_click(interval=0.5)
     def _set_action_form_edit_mode(self):
         """设置行为表单为编辑模式"""
         try:
@@ -1088,6 +1097,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置行为表单编辑模式失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _set_action_buttons_edit_mode(self):
         """设置行为相关按钮为编辑模式"""
         try:
@@ -1104,6 +1114,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"设置行为按钮编辑模式失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def load_action_detail_data(self, action):
         """加载行为详细信息 - 参考home_tab.py中的_fill_action_data方法"""
         try:
@@ -1160,6 +1171,7 @@ class SuitViewFunc:
         finally:
             self._close_session()
     
+    @prevent_double_click(interval=0.5)
     def _fill_mouse_action_data(self, mouse_action):
         """填充鼠标行为数据"""
         try:
@@ -1181,6 +1193,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"填充鼠标行为数据失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _fill_keyboard_action_data(self, keyboard_action):
         """填充键盘行为数据"""
         try:
@@ -1196,6 +1209,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"填充键盘行为数据失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _fill_class_action_data(self, class_action):
         """填充类行为数据"""
         try:
@@ -1212,6 +1226,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"填充类行为数据失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _fill_ai_action_data(self, ai_action):
         """填充AI行为数据"""
         try:
@@ -1225,6 +1240,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"填充AI行为数据失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _fill_image_action_data(self, image_action):
         """填充图像行为数据"""
         try:
@@ -1246,6 +1262,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"填充图像行为数据失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _fill_function_action_data(self, function_action):
         """填充函数行为数据"""
         try:
@@ -1262,6 +1279,7 @@ class SuitViewFunc:
         except Exception as e:
             logger.error(f"填充函数行为数据失败: {str(e)}")
     
+    @prevent_double_click(interval=0.5)
     def _fill_code_action_data(self, code_action):
         """填充代码行为数据"""
         try:

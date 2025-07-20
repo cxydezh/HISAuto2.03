@@ -15,6 +15,7 @@ import time
 
 from models.user import User
 from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy
+from utils.hometab_funcdata import hometab_funcData
 from utils.screenshot_tool import ScreenshotTool
 from utils.home_tab_func import home_tab_action_group_func, ActionManager, ActionGroupManager
 
@@ -367,6 +368,9 @@ class HomeTab(BaseTab):
         if current_index > 0:  # 如果不是第一个
             # 移动项
             self.action_tree.move(item, parent, current_index - 1)
+            # 更新数据库
+            from utils.hometab_funcdata import hometab_funcData
+            hometab_funcData._sort_action_group_up_data(sheet_type="Action",iid=self.action_tree_selected_iid,hierarchy_id=self.action_group_hierarchy_id,group_id=self.action_group_id,sort_num=self.hierarchy_sort)
             
     @prevent_double_click(interval=0.5)
     def _sort_action_group_down(self):
@@ -717,7 +721,7 @@ class HomeTab(BaseTab):
                             action.id, action.action_type, action.action_name, action.next_id
                         ))
                     
-                    self.hierarchy_sort = hierarchy.sort_num if hierarchy else None
+                    self.hierarchy_sort = group.sort_num if group else None
                     selected_group_rank = hierarchy.group_rank if hierarchy else None
                     
                     # 启用中间面板按钮 - 使用ActionManager的方法
@@ -962,7 +966,12 @@ class HomeTab(BaseTab):
             if self.is_auto_var.get() and not self.auto_time_var.get().strip():
                 messagebox.showwarning("警告", "启用自动执行时，必须设置执行时间")
                 return
-            
+            if self.action_group_hierarchy_tree_iid.startswith("A"):
+                # 开始保存行为组层级信息
+                if not hometab_funcData._save_action_group_hierarchy_data('Action',self.action_group_hierarchy_id,self.group_name_var.get(),self.group_desc_var.get(),self.is_auto_var.get(),self.auto_time_var.get()) :
+                    return False
+                messagebox.showinfo("成功", "保存行为组层级信息成功")
+                return True
             # 创建home_tab_action_group_func实例
             home_tab_action_group_func_model = home_tab_action_group_func(
                 self.group_name_var.get().strip(), 
@@ -990,6 +999,7 @@ class HomeTab(BaseTab):
                 messagebox.showerror("错误", "保存行为组失败")
                 
         except ValueError as e:
+            print(traceback.format_exc())
             messagebox.showerror("验证错误", str(e))
         except Exception as e:
             messagebox.showerror("错误", f"保存行为组时发生异常: {str(e)}")
