@@ -218,12 +218,10 @@ class ActionGroupHierarchy_Manager:
                 first_key_ascii = ord(first_key)
                 #检查是否超出有效范围（A=65, B=66, C=67, D=68, E=69）
                 if first_key_ascii > 68:  # 如果大于'E'的ASCII码
-                    first_key_ascii = 69  # 设置为'E'
                     return False
                 #将first_key_ascii转换为字符
-                first_key = chr(first_key_ascii)
                 next_first_key = chr(first_key_ascii + 1)
-                #获取group_rank_dict中next_first_key之前的所有的key和Value组成的字符串
+                #获取group_rank_dict中first_key之前的所有的key和Value组成的字符串
                 group_rank_str = ""
                 for key, value in group_rank_dict.items():
                     if key < first_key:
@@ -240,7 +238,7 @@ class ActionGroupHierarchy_Manager:
                 max_sort_num = 0
                 for record in action_group_hierarchy_records:
                     temp_group_rank_dict = parse_group_rank(record.group_rank)
-                    if temp_group_rank_dict[next_first_key] == 0:
+                    if temp_group_rank_dict[first_key] == 0:
                         continue
                     # 安全检查：确保键存在于字典中
                     if (first_key in temp_group_rank_dict and 
@@ -254,8 +252,6 @@ class ActionGroupHierarchy_Manager:
                             max_first_key_value = first_key_value
                         if record.sort_num > max_sort_num:
                             max_sort_num = record.sort_num
-                        if record.sort_num >= self.hierarchy_sort:
-                            record.sort_num += 1
                     else: 
                         pass
                 #创建新的group_rank
@@ -263,7 +259,7 @@ class ActionGroupHierarchy_Manager:
                 #获取temp_group_rank_dict
                 temp_group_rank_dict3 = parse_group_rank(temp_group_rank_str3)
                 #修改temp_group_rank_dict中first_key的Value
-                temp_group_rank_dict3[next_first_key] = max_first_key_value + 1
+                temp_group_rank_dict3[first_key] = max_first_key_value + 1
                 #将temp_group_rank_dict转换为group_rank_str
                 temp_group_rank_str3 = ""
                 for key, value in temp_group_rank_dict3.items():

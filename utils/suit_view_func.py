@@ -25,6 +25,7 @@ from models.user import User
 from models.department import Department
 from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
 import globalvariable
+from utils.hometab_funcdata import hometab_funcData
 from utils.logger import Logger, logger
 from utils.screenshot_tool import ScreenshotTool
 from core.pic_capture import PicCapture
@@ -99,103 +100,8 @@ class SuitViewFunc:
     
     def load_suit_tree(self):
         """加载组套树形数据 - 参考home_tab.py中的_refresh_action_group方法"""
-        try:
-            session = self._get_session()
-            if not session:
-                return False
-            
-            # 清空树
-            for item in self.suit_view.suit_tree.get_children():
-                self.suit_view.suit_tree.delete(item)
-            
-            # 获取所有组套层次数据
-            hierarchies = session.query(ActionsSuitGroupHierarchy).order_by(ActionsSuitGroupHierarchy.sort_num).all()
-            
-            # 构建树形结构字典
-            tree_dict = self._build_suit_tree_structure(hierarchies)
-            
-            # 递归插入节点到Treeview
-            def insert_node(key, parent_iid):
-                if key not in tree_dict:
-                    return
-                    
-                node = tree_dict[key]
-                h = node['obj']
-                user = self._get_user_by_id(h.doctor_id)
-                username = user.username if user else "未知"
-                
-                # 插入当前节点
-                if parent_iid == "":
-                    self.suit_view.suit_tree.insert("", "end", iid=node['iid'], text=h.group_name, 
-                                                  values=(h.group_name, username))
-                else:
-                    self.suit_view.suit_tree.insert(parent_iid, "end", iid=node['iid'], text="📁", 
-                                                  values=(h.group_name, username))
-                
-                # 递归插入子节点
-                for child_key in node['children']:
-                    insert_node(child_key, node['iid'])
-            
-            # 插入顶层节点（A级节点，B=C=D=E=0）
-            inserted_nodes = set()  # 记录已插入的节点，避免重复
-            
-            # 首先插入A级节点（B=C=D=E=0）
-            for key, node in tree_dict.items():
-                rank = parse_group_rank(key)
-                if (rank['B'] == 0 and rank['C'] == 0 and 
-                    rank['D'] == 0 and rank['E'] == 0):
-                    if key not in inserted_nodes:
-                        insert_node(key, "")
-                        inserted_nodes.add(key)
-            
-            # 查询所有组套，插入到对应层级下
-            groups = session.query(ActionsSuitGroup).all()
-            for group in groups:
-                if not hasattr(group, 'group_rank_id') or not group.group_rank_id:
-                    logger.error(f"组套 {group.action_list_group_name} 没有层次ID")
-                    continue
-                    
-                # 获取组套对应的层级
-                rank_record = session.query(ActionsSuitGroupHierarchy).filter_by(id=group.group_rank_id).first()
-                if not rank_record:
-                    logger.error(f"组套 {group.action_list_group_name} 没有对应的层次")
-                    continue
-                    
-                rank_dict = parse_group_rank(rank_record.group_rank)
-                
-                # 确定组套应该插入到哪个层级节点下
-                if rank_dict['E'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
-                elif rank_dict['D'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}"
-                elif rank_dict['C'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}"
-                elif rank_dict['B'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}"
-                else:
-                    parent_iid = f"A{rank_dict['A']}"
-                
-                # 检查父节点是否存在
-                try:
-                    if self.suit_view.suit_tree.exists(parent_iid):
-                        user = self._get_user_by_id(group.user_id)
-                        username = user.username if user else "未知"
-                        
-                        # 插入组套节点
-                        self.suit_view.suit_tree.insert(parent_iid, "end", text="📄", 
-                                                      values=(group.action_list_group_name, username), 
-                                                      iid=f"group_{group.id}")
-                    else: 
-                        logger.error(f"父节点 {parent_iid} 不存在")
-                except Exception as e:
-                    logger.error(f"插入组套节点失败: {str(e)}")
-            
-            return True
-        except Exception as e:
-            logger.error(f"加载组套树形数据失败: {str(e)}")
-            return False
-        finally:
-            self._close_session()
+        hometab_funcData._load_action_group_data('Action_suit',self.suit_view.suit_tree)
+        return
     
     def load_action_list(self, suit_id=None):
         """加载行为列表 - 参考home_tab.py中的_refresh_action_list方法"""

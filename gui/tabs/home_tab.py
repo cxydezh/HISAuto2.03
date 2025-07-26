@@ -475,7 +475,7 @@ class HomeTab(BaseTab):
         # 强制设置最小高度为250px
         self.action_list_frame.pack_propagate(False)
         self.action_list_frame.grid_propagate(False)  # 防止grid布局影响大小
-        self.action_list_frame.configure(height=170)  # 设置固定尺寸
+        self.action_list_frame.configure(height=210)  # 设置固定尺寸
         
         # 配置网格权重
         self.action_list_frame.grid_rowconfigure(0, weight=1)
@@ -673,6 +673,7 @@ class HomeTab(BaseTab):
             return
         iid = selected[0]
         self.action_tree_selected_iid = iid
+        self.action_group_hierarchy_tree_iid = iid
         if iid in("A0","A1","A2"):
             self._set_action_group_entry_controls_state('disabled')
             self._set_action_group_button_controls_state('disabled') 
@@ -698,7 +699,6 @@ class HomeTab(BaseTab):
                     user = data['user']
                     actions = data['actions']
                     
-                    self.action_group_hierarchy_tree_iid = group.group_rank_id
                     self.action_group_hierarchy_id = group.group_rank_id
                     
                     # 填充详情区
@@ -729,7 +729,6 @@ class HomeTab(BaseTab):
             else:
                 # 选中的是ActionsGroupHierarchy
                 selected_group_rank = iid_to_group_rank(iid)
-                self.action_group_hierarchy_tree_iid = selected_group_rank
                 
                 # 使用ActionGroupManager获取层级数据
                 hierarchy = self.action_group_manager.get_hierarchy_data(self.action_group_hierarchy_tree_iid)
@@ -790,95 +789,8 @@ class HomeTab(BaseTab):
     @prevent_double_click(interval=1.0)
     def _refresh_action_group(self):
         """刷新行为组树，按GroupRank分层显示"""
-        try:
-            # 清空树
-            self.action_tree.delete(*self.action_tree.get_children())
-            
-            # 使用ActionGroupManager获取所有层级数据
-            hierarchies = self.action_group_manager.get_all_hierarchies()
-            
-            # 使用ActionGroupManager构建树形结构
-            tree_dict = self.action_group_manager.build_tree_structure(hierarchies)
-            
-            # 递归插入节点到Treeview
-            def insert_node(key, parent_iid):
-                if key not in tree_dict:
-                    return
-                    
-                node = tree_dict[key]
-                h = node['obj']
-                user = self.action_group_manager.get_user_by_id(h.doctor_id)
-                username = user.username if user else "未知"
-                
-                # 插入当前节点
-                if parent_iid == "":
-                    self.action_tree.insert("", "end", iid=node['iid'], text=h.group_name, 
-                                          values=(h.group_name, username))
-                else:
-                    self.action_tree.insert(parent_iid, "end", iid=node['iid'], text="📁", 
-                                          values=(h.group_name, username))
-                
-                # 递归插入子节点
-                for child_key in node['children']:
-                    insert_node(child_key, node['iid'])
-            
-            # 插入顶层节点（A级节点，B=C=D=E=0）
-            inserted_nodes = set()  # 记录已插入的节点，避免重复
-            for key, node in tree_dict.items():
-                rank = parse_group_rank(key)
-                if (rank['B'] == 0 and rank['C'] == 0 and 
-                    rank['D'] == 0 and rank['E'] == 0):
-                    if key not in inserted_nodes:
-                        insert_node(key, "")
-                        inserted_nodes.add(key)
-            
-            # 查询所有行为组，插入到对应层级下
-            groups = self.action_group_manager.get_all_action_groups()
-            for group in groups:
-                if not hasattr(group, 'group_rank_id') or not group.group_rank_id:
-                    continue
-                    
-                # 获取行为组对应的层级
-                rank_record = self.action_group_manager.get_hierarchy_by_id(group.group_rank_id)
-                if not rank_record:
-                    continue
-                    
-                rank_dict = parse_group_rank(rank_record.group_rank)
-                
-                # 确定行为组应该插入到哪个层级节点下
-                if rank_dict['E'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
-                elif rank_dict['D'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}"
-                elif rank_dict['C'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}"
-                elif rank_dict['B'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}"
-                else:
-                    parent_iid = f"A{rank_dict['A']}"
-                
-                # 检查父节点是否存在
-                try:
-                    if self.action_tree.exists(parent_iid):
-                        user = self.action_group_manager.get_user_by_id(group.user_id)
-                        username = user.username if user else "未知"
-                        
-                        # 插入行为组节点
-                        self.action_tree.insert(parent_iid, "end", text="📄", 
-                                              values=(group.action_list_group_name, username), 
-                                              iid=f"group_{group.id}")
-                except tk.TclError:
-                    # 父节点不存在，跳过这个行为组
-                    print(f"Warning: Parent node {parent_iid} not found for group {group.id}")
-                    continue
-            
-            # 启用刷新按钮
-            self.btn_refresh_action_group.config(state='normal')
-            
-        except Exception as e:
-            print(f"Error in _refresh_action_group: {e}")
-            print(traceback.format_exc())
-            messagebox.showerror("错误", f"刷新行为组失败: {e}")
+        hometab_funcData._load_action_group_data('Action',self.action_tree)
+        return
     @prevent_double_click(interval=1.0)
     def _new_action_group_group(self):
         """新建行为组组"""
@@ -957,6 +869,9 @@ class HomeTab(BaseTab):
     def _save_action_group(self):
         """保存行为组"""
         try:
+            if not self.action_group_action_type :
+                messagebox.showwarning("警告", "请先选择行为组类型")
+                return
             # 验证必填字段
             if not self.group_name_var.get().strip():
                 messagebox.showwarning("警告", "请输入行为组名称")
@@ -974,18 +889,18 @@ class HomeTab(BaseTab):
                 return True
             # 创建home_tab_action_group_func实例
             home_tab_action_group_func_model = home_tab_action_group_func(
-                self.group_name_var.get().strip(), 
-                self.group_desc_var.get().strip(),
-                globalvariable.USER_ID,
-                globalvariable.USER_DEPARTMENT_ID,
-                self.is_auto_var.get(),
-                self.auto_time_var.get(),
-                self.action_group_selected_rank,
-                self.action_tree_selected_iid,
-                self.action_group_action_type,
-                self.hierarchy_sort,
-                self.action_group_id,
-                self.action_group_hierarchy_id
+                group_name=self.group_name_var.get().strip(), 
+                group_desc=self.group_desc_var.get().strip(),
+                group_user_id=globalvariable.USER_ID,
+                group_department_id=globalvariable.USER_DEPARTMENT_ID,
+                is_auto=self.is_auto_var.get(),
+                auto_time=self.auto_time_var.get(),
+                action_group_selected_rank=self.action_group_selected_rank,
+                action_tree_selected_iid=self.action_tree_selected_iid,
+                action_group_type=self.action_group_action_type,
+                sort_num=self.hierarchy_sort,
+                action_group_id=self.action_group_id,
+                action_group_hierarchy_id=self.action_group_hierarchy_id
             )
             
             # 保存行为组
@@ -1002,6 +917,7 @@ class HomeTab(BaseTab):
             print(traceback.format_exc())
             messagebox.showerror("验证错误", str(e))
         except Exception as e:
+            print(traceback.format_exc())
             messagebox.showerror("错误", f"保存行为组时发生异常: {str(e)}")
         finally:
             # 确保关闭数据库会话
@@ -1257,10 +1173,12 @@ class HomeTab(BaseTab):
         
     def _create_ai_controls(self):
         """创建AI控件"""
+        self.action_group_ai_training_group = self._get_ai_training_group()
         # 训练库名称
         ttk.Label(self.action_list_frame, text="训练库名称:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_ai_training_group_var = tk.StringVar(master=self.frame)
-        ttk.Entry(self.action_list_frame, textvariable=self.action_ai_training_group_var).grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        self.action_ai_training_group_comb = ttk.Combobox(self.action_list_frame, textvariable=self.action_ai_training_group_var, values=self.action_group_ai_training_group, state="readonly")
+        self.action_ai_training_group_comb.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
         
         # 记录名称
         ttk.Label(self.action_list_frame, text="记录名称:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
@@ -1286,10 +1204,38 @@ class HomeTab(BaseTab):
         ttk.Label(self.action_list_frame, text="时间差:").grid(row=5, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_ai_time_diff_var = tk.StringVar(master=self.frame)
         ttk.Entry(self.action_list_frame, textvariable=self.action_ai_time_diff_var).grid(row=5, column=1, sticky=tk.EW, padx=5, pady=5)
-        
+        self.action_ai_training_group_comb.bind('<<ComboboxSelected>>', self._on_ai_training_group_changed)
+
         # 配置grid权重
         self.action_list_frame.grid_columnconfigure(1, weight=1)
-        
+    def _get_ai_training_group(self):
+        """获取AI训练组字典"""
+        try:
+            # 模拟几组数据
+            return ["AI病历审查", "AI病史汇报", "AI诊疗审查"]
+        except Exception as e:
+            print(f"获取AI训练组失败: {e}")
+            return []
+    def _on_ai_training_group_changed(self, event=None):
+        # 模拟几组数据到相应的控件中
+        if self.action_ai_training_group_var.get() == "AI病历审查":
+            self.action_ai_record_name_var.set("病历审查")
+            self.action_ai_long_text_name_var.set("病历审查长文本.txt")
+            self.action_ai_illustration_var.set("")
+            self.action_ai_note_var.set("病历审查备注信息")
+            self.action_ai_time_diff_var.set("病历审查时间差")
+        elif self.action_ai_training_group_var.get() == "AI病史汇报":
+            self.action_ai_record_name_var.set("病史汇报")
+            self.action_ai_long_text_name_var.set("病史汇报长文本.txt")
+            self.action_ai_illustration_var.set("")
+            self.action_ai_note_var.set("病史汇报备注信息")
+            self.action_ai_time_diff_var.set("病史汇报时间差")  
+        elif self.action_ai_training_group_var.get() == "AI诊疗审查":
+            self.action_ai_record_name_var.set("诊疗审查")
+            self.action_ai_long_text_name_var.set("诊疗审查长文本.txt")
+            self.action_ai_illustration_var.set("")
+            self.action_ai_note_var.set("诊疗审查备注信息")
+            self.action_ai_time_diff_var.set("诊疗审查时间差")
         
     def _create_image_controls(self):
         """创建图像控件"""

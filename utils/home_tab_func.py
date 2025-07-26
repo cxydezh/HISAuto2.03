@@ -844,7 +844,7 @@ class ActionManager:
                 
             elif action_type == 'AI':
                 # 填充AI控件数据
-                self.home_tab.action_ai_training_group_var.set(action_data.training_group)
+                self.home_tab.action_ai_training_group_var.set(action_data.train_group_name)
                 self.home_tab.action_ai_record_name_var.set(action_data.train_long_name)
                 self.home_tab.action_ai_long_text_name_var.set(action_data.long_txt_name)
                 self.home_tab.action_ai_illustration_var.set(action_data.ai_illustration)
@@ -929,11 +929,11 @@ class ActionManager:
                 
             elif action_type == "AI":
                 action_detail = ActionAI(
-                    train_group_name=self.home_tab.ai_train_group_var.get(),
-                    train_long_name=self.home_tab.ai_train_long_name_var.get(),
-                    long_txt_name=self.home_tab.ai_long_txt_name_var.get(),
-                    ai_illustration=self.home_tab.ai_illustration_var.get(),
-                    ai_note=self.home_tab.ai_note_var.get(),
+                    train_group_name=self.home_tab.action_ai_training_group_var.get(),
+                    train_long_name=self.home_tab.action_ai_record_name_var.get(),
+                    long_txt_name=self.home_tab.action_ai_long_text_name_var.get(),
+                    ai_illustration=self.home_tab.action_ai_illustration_var.get(),
+                    ai_note=self.home_tab.action_ai_note_var.get(),
                     action_list_id=action_list_id
                 )
                 session.add(action_detail)
@@ -1119,7 +1119,7 @@ class ActionManager:
                 errors.append("类名不能为空")
         
         elif action_type == "AI":
-            if not self.home_tab.ai_train_group_var.get().strip():
+            if not self.home_tab.action_ai_training_group_var.get().strip():
                 errors.append("AI训练组名不能为空")
         
         elif action_type == "image":

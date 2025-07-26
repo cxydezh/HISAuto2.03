@@ -343,12 +343,12 @@ class hometab_funcData:
                 #获取group_rank_dict中first_key的ascii码
                 first_key_ascii = ord(first_key)
                 #将first_key_ascii减1，但要确保不超出有效范围
-                first_key_ascii -= 1
+                pro_first_key_ascii = first_key_ascii - 1
                 #检查是否超出有效范围（A=65, B=66, C=67, D=68, E=69）
-                if first_key_ascii < 66:  # 如果小于'B'的ASCII码
-                    first_key_ascii = 66  # 设置为'B'
+                if pro_first_key_ascii < 66:  # 如果小于'B'的ASCII码
+                    pro_first_key_ascii = 66  # 设置为'B'
                 #将first_key_ascii转换为字符
-                pro_first_key = chr(first_key_ascii)
+                pro_first_key = chr(pro_first_key_ascii)
                 #获取group_rank_dict中pro_first_key之前的所有的key和Value组成的字符串
                 group_rank_str = ""
                 for key, value in group_rank_dict.items():
@@ -361,9 +361,10 @@ class hometab_funcData:
                 ).all()
                 for child_group in child_groups:
                     child_group_rank_dict = parse_group_rank(child_group.group_rank)
-                    if child_group_rank_dict[first_key] == 0:
+                    if child_group_rank_dict[first_key] != 0:
                         continue
-                    child_group.sort_num = cls.sort_num
+                    if child_group.sort_num == cls.sort_num-1:
+                        child_group.sort_num = cls.sort_num
                 # 修改当前组的排序号
                 hierarchy.sort_num = cls.sort_num - 1
                 session.commit()
@@ -488,11 +489,19 @@ class hometab_funcData:
             else:
                 logger.error(f"无效的行为组类型: {sheet_type}")
                 return False
+            cls.sheet_hierarchy_model = cls._get_model_class(cls.sheet_hierarchy)
+            if not cls.sheet_hierarchy_model:
+                logger.error("无法获取模型类")
+                return False
+            cls.sheet_listgroup_model = cls._get_model_class(cls.sheet_listgroup)
+            if not cls.sheet_listgroup_model:
+                logger.error("无法获取模型类")
+                return False
             # 清空树
             cls.action_treeview.delete(*cls.action_treeview.get_children())
             # 获取所有层级数据
             hierarchy_groups = {}
-            hierarchies = session.query(cls.sheet_hierarchy).all()
+            hierarchies = session.query(cls.sheet_hierarchy_model).all()
             for hierarchy in hierarchies:
                 rank_dict = parse_group_rank(hierarchy.group_rank)
                 parent_key = cls._get_parent_key(rank_dict)
@@ -501,20 +510,139 @@ class hometab_funcData:
                 hierarchy_groups[parent_key].append(hierarchy)
             for parent_key in hierarchy_groups:
                 hierarchy_groups[parent_key].sort(key=lambda x: x.sort_num)
+            # 按照父节点key排序，然后合并所有组
             sorted_parent_keys = sorted(hierarchy_groups.keys())
             sorted_hierarchies = []
-            
+            for parent_key in sorted_parent_keys:
+                sorted_hierarchies.extend(hierarchy_groups[parent_key])
+            hierarchies = sorted_hierarchies
             # 使用ActionGroupManager构建树形结构
-            tree_dict = cls.action_group_manager.build_tree_structure(hierarchies)
-
+            tree_dict = cls.build_tree_structure(hierarchies)
             # 递归插入节点到Treeview
             def insert_node(key, parent_iid):
                 if key not in tree_dict:
-                    pass
+                    return
+                node = tree_dict[key]
+                h = node['obj']
+                user = session.query(User).filter_by(id=h.doctor_id).first()
+                username = user.username if user else "未知"
+                # 插入当前节点
+                if parent_iid == "":
+                    cls.action_treeview.insert("", "end", iid=node['iid'], text=h.group_name, 
+                                          values=(h.group_name, username))
+                else:
+                    cls.action_treeview.insert(parent_iid, "end", iid=node['iid'], text="📁", 
+                                          values=(h.group_name, username))
+                # 插入子节点
+                for child_key in node['children']:
+                    insert_node(child_key, node['iid'])
+            # 插入顶层节点（A级节点，B=C=D=E=0）    
+            inserted_nodes = set()  # 记录已插入的节点，避免重复
+            for key, node in tree_dict.items():
+                rank = parse_group_rank(key)
+                if rank['B'] == 0 and rank['C'] == 0 and rank['D'] == 0 and rank['E'] == 0:
+                    if key not in inserted_nodes:
+                        insert_node(key, "")
+                        inserted_nodes.add(key)
+            # 查询所有行为组，插入到对应层级下
+            groups = session.query(cls.sheet_listgroup_model).all()
+            for group in groups:
+                if not hasattr(group, 'group_rank_id') or not group.group_rank_id:
+                    continue
+                # 获取行为组对应的层级
+                rank_record = session.query(cls.sheet_hierarchy_model).filter_by(id=group.group_rank_id).first()
+                if not rank_record:
+                    continue
+                rank_dict = parse_group_rank(rank_record.group_rank)
+                # 确定行为组应该插入到哪个层级节点下
+                if rank_dict['E'] > 0:
+                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
+                elif rank_dict['D'] > 0:
+                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}"
+                elif rank_dict['C'] > 0:
+                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}"
+                elif rank_dict['B'] > 0:
+                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}"
+                else:
+                    parent_iid = f"A{rank_dict['A']}"
+                # 检查父节点是否存在
+                if cls.action_treeview.exists(parent_iid):
+                    user = session.query(User).filter_by(id=group.user_id).first()
+                    username = user.username if user else "未知"
+                    # 插入行为组节点
+                    cls.action_treeview.insert(parent_iid, "end", text="📄", 
+                                              values=(group.action_list_group_name, username), 
+                                              iid=f"group_{group.id}")
+                else:
+                    # 父节点不存在，跳过这个行为组
+                    continue
+            return True
         except Exception as e:
             logger.error(f"加载行为组数据失败: {str(e)}")
             print(traceback.format_exc())
-    
+        finally:
+            session.close()
+    @classmethod
+    def build_tree_structure(self, hierarchies):
+        """构建树形结构数据"""
+        tree_dict = {}
+        
+        for h in hierarchies:
+            rank_dict = parse_group_rank(h.group_rank)
+            key = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
+            
+            # 根据用户权限过滤
+            if globalvariable.USER_IS_SUPER_ADMIN:
+                tree_dict[key] = {
+                    'obj': h,
+                    'iid': None,
+                    'children': [],
+                    'parent': None
+                }
+            else:
+                # 普通用户只能看到全局(A=2)或自己科室的层级
+                if rank_dict['A'] == 2 or h.department_id == globalvariable.USER_DEPARTMENT_ID:
+                    tree_dict[key] = {
+                        'obj': h,
+                        'iid': None,
+                        'children': [],
+                        'parent': None
+                    }
+        
+        # 建立父子关系
+        for key, node in tree_dict.items():
+            rank = parse_group_rank(key)
+            
+            # 确定父节点key和当前节点iid
+            if rank['E'] > 0:
+                parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E0"
+                parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+                node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E{rank['E']}"
+            elif rank['D'] > 0:
+                parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D0E0"
+                parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+                node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+            elif rank['C'] > 0:
+                parent_key = f"A{rank['A']}B{rank['B']}C0D0E0"
+                parent_iid = f"A{rank['A']}B{rank['B']}"
+                node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+            elif rank['B'] > 0:
+                parent_key = f"A{rank['A']}B0C0D0E0"
+                parent_iid = f"A{rank['A']}"
+                node['iid'] = f"A{rank['A']}B{rank['B']}"
+            else:
+                parent_key = None
+                parent_iid = None
+                node['iid'] = f"A{rank['A']}"
+            
+            # 设置父子关系
+            if parent_key and parent_key in tree_dict:
+                node['parent'] = parent_iid
+                tree_dict[parent_key]['children'].append(key)
+            else:
+                node['parent'] = None
+        
+        return tree_dict
     @classmethod
     def _get_parent_key(self, rank_dict):
         """获取父节点key
