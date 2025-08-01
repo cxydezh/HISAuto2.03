@@ -199,7 +199,7 @@ class ActionList(BaseModel):
     next_id = Column(Integer)  # 下一步ID
     debug_group_id = Column(Integer)  # Debug调试用ID
     action_note = Column(String(500))  # 行为元备注
-
+    list_rank_id = Column(Integer,ForeignKey('list_group_hierarchy.id'))
     # 关系
     mouse_actions = relationship("ActionMouse", back_populates="action_list")
     keyboard_actions = relationship("ActionKeyboard", back_populates="action_list")
@@ -209,10 +209,27 @@ class ActionList(BaseModel):
     function_actions = relationship("ActionFunction", back_populates="action_list")
     class_actions = relationship("ActionClass", back_populates="action_list")
     action_list_group = relationship("ActionGroup", back_populates="action_list")
-
+    list_group_hierarchy = relationship("ListGroupHierarchy", back_populates="action_lists")
     def __repr__(self):
         return f"<ActionList(id={self.id}, name={self.action_name})>"
+class ListGroupHierarchy(BaseModel):
+    """行为组分层"""
+    __tablename__ = 'list_group_hierarchy'
 
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
+    group_id = Column(Integer,ForeignKey('action_list_group.id'))
+    list_name = Column(String(200))  # 组名称
+    list_rank = Column(String(50))  # 组级别
+    sort_num = Column(Integer)  # 排序编码
+    user_id = Column(String(50), ForeignKey('users.user_id'))  # 医生ID
+    department_id = Column(Integer, ForeignKey('departments.code'))  # 科室ID
+    group_note = Column(String(500))  # 组备注
+
+    # 关系
+    action_lists = relationship("ActionList", back_populates="list_group_hierarchy")
+    action_list_group = relationship("ActionGroup", back_populates="list_group_hierarchy")
+    def __repr__(self):
+        return f"<ListGroupHierarchy(id={self.id}, name={self.group_name})>" 
 class ActionGroup(BaseModel):
     """行为组表"""
     __tablename__ = 'action_list_group'
@@ -241,6 +258,7 @@ class ActionGroup(BaseModel):
     department = relationship("Department", back_populates="action_groups")
     task_list_finished = relationship("TaskListFinished", back_populates="action_group")
     auto_task = relationship("AutoTask", back_populates="action_group")
+    list_group_hierarchy = relationship("ListGroupHierarchy", back_populates="action_list_group")
 
     def __repr__(self):
         return f"<ActionGroup(id={self.id}, name={self.action_list_group_name})>"

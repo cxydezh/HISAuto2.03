@@ -207,7 +207,7 @@ class ActionsSuitList(BaseModel):
     next_id = Column(Integer)  # 下一步ID
     debug_group_id = Column(Integer)  # Debug调试用ID
     action_note = Column(String(500))  # 行为元备注
-
+    list_rank_id = Column(Integer,ForeignKey('list_suit_hierarchy.id'))
     # 关系
     mouse_actions = relationship("ActionSuitMouse", back_populates="action_list")
     keyboard_actions = relationship("ActionSuitKeyboard", back_populates="action_list")
@@ -217,7 +217,25 @@ class ActionsSuitList(BaseModel):
     function_actions = relationship("ActionSuitFunction", back_populates="action_list")
     class_actions = relationship("ActionSuitClass", back_populates="action_list")
     action_list_group = relationship("ActionsSuitGroup", back_populates="action_lists")
+    list_suit_hierarchy = relationship("ListSuitHierarchy", back_populates="suit_lists")
+    def __repr__(self):
+        return f"<ActionSuitList(id={self.id}, name={self.action_name})>"
+class ListSuitHierarchy(BaseModel):
+    """行为组分层"""
+    __tablename__ = 'list_suit_hierarchy'
 
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
+    group_id = Column(Integer,ForeignKey('actions_suit_group.id'))
+    list_name = Column(String(200))  # 组名称
+    list_rank = Column(String(50))  # 组级别
+    sort_num = Column(Integer)  # 排序编码
+    user_id = Column(String(50), ForeignKey('users.user_id'))  # 医生ID
+    department_id = Column(Integer, ForeignKey('departments.code'))  # 科室ID
+    group_note = Column(String(500))  # 组备注
+
+    # 关系
+    suit_lists = relationship("ActionsSuitList", back_populates="list_suit_hierarchy")
+    action_suit_group = relationship("ActionsSuitGroup", back_populates="list_suit_hierarchy")
 class ActionsSuitGroup(BaseModel):
     """Suit行为组表"""
     __tablename__ = 'actions_suit_group'
@@ -244,7 +262,7 @@ class ActionsSuitGroup(BaseModel):
     action_suit_group_hierarchy = relationship("ActionsSuitGroupHierarchy", back_populates="action_suit_groups")
     user = relationship("User", back_populates="action_suit_groups")
     department = relationship("Department", back_populates="action_suit_groups")
-
+    list_suit_hierarchy = relationship("ListSuitHierarchy", back_populates="action_suit_group")
 class ActionsSuitGroupHierarchy(BaseModel):
     """行为组套"""
     __tablename__ = 'actions_suit_group_hierarchy'

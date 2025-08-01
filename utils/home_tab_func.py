@@ -15,7 +15,9 @@ import win32gui
 import win32api
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
-from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt
+from models.action_suit import ActionsSuitGroup, ActionsSuitGroupHierarchy
+from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt, ListGroupHierarchy
+from models.debug_actions import ActionsDebugGroup, ActionsDebugGroupHierarchy
 from models.user import User
 from models.department import Department
 from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
@@ -62,17 +64,18 @@ class home_tab_action_group_func:
             ("action_group_type", action_group_type),
             ("sort_num", sort_num)
         ]
+       
+#        missing_params = []
+ #       for param, value in required_params:
+ #           if not value:
+ #               missing_params.append(param)
         
-        missing_params = []
-        for param, value in required_params:
-            if not value:
-                missing_params.append(param)
-        
-        if missing_params:
-            error_msg = f"行为组信息无效：以下参数不能为空: {', '.join(missing_params)}"
-            logger.error(error_msg)
-            messagebox.showinfo("提示", error_msg)
-            raise ValueError(error_msg)
+       
+ #         if missing_params:
+ #           error_msg = f"行为组信息无效：以下参数不能为空: {', '.join(missing_params)}"
+ #           logger.error(error_msg)
+ #           messagebox.showinfo("提示", error_msg)
+ #           raise ValueError(error_msg)
             
         # 验证自动执行时间
         if is_auto and not auto_time:
@@ -197,11 +200,15 @@ class home_tab_action_group_func:
         finally:
             if session and session != self.session:
                 session.close()
-    def _delete_action_group(self)->bool:
-        """删除行为组"""
+    @classmethod
+    def _delete_action_group(cls,action_tree_selected_iid,action_group_id,action_group_hierarchy_id)->bool:
+        """删除行为组。action_tree_selected_iid为行为组列表层级iid。action_group_id为行为组id。action_group_hierarchy_id为行为组层次id。"""
         session = None
         try:
-            hometab_funcData.delete_action_group(sheet_type="Action",action_tree_selected_iid=self.action_tree_selected_iid,action_group_id=self.action_group_id,action_group_hierarchy_id=self.action_group_hierarchy_id)
+            cls.action_tree_selected_iid = action_tree_selected_iid
+            cls.action_group_id = action_group_id
+            cls.action_group_hierarchy_id = action_group_hierarchy_id
+            hometab_funcData.delete_action_group(sheet_type="Action",action_tree_selected_iid=cls.action_tree_selected_iid,action_group_id=cls.action_group_id,action_group_hierarchy_id=cls.action_group_hierarchy_id)
             return True
         except Exception as e:
             if session:
@@ -407,7 +414,9 @@ class ActionManager:
         if not self.home_tab.action_group_id:
             messagebox.showinfo("提示", "请先选择行为组")
             return False
-            
+        if not self.home_tab.current_action_list_hierarchy_id:
+            messagebox.showinfo("提示", "请先选择行为组列表层级或新建列表层。")
+            return False
         # 设置行为元操作类型为新增
         self.home_tab.action_operation_type = 1
         
@@ -439,9 +448,6 @@ class ActionManager:
             messagebox.showinfo("提示", "请先选择要修改的行为")
             return False
             
-        # 获取选中的行为元ID
-        self.home_tab.current_action_id = self.home_tab.action_list.item(selected[0])['values'][0]
-        
         # 设置行为元操作类型为修改
         self.home_tab.action_operation_type = 2
         
@@ -453,25 +459,77 @@ class ActionManager:
         
         return True
     
-    def delete_action(self):
+    def delete_action(self,action_type,current_action_id,current_action_list_hierarchy_id):
         """删除行为元"""
         selected = self.home_tab.action_list.selection()
         if not selected:
             messagebox.showwarning("警告", "请先选择要删除的行为")
             return False
-            
         if messagebox.askyesno("确认", "确定要删除选中的行为吗？"):
             session = None
             try:
-                # 获取选中的行为元ID
-                action_id = self.home_tab.action_list.item(selected[0])['values'][0]
-                
-                # 从数据库删除行为元
                 session = self._get_session()
                 if not session:
                     return False
+                if action_type == "list_hierarchy":
+                    list_hierarchy = session.query(ListGroupHierarchy).filter_by(id=current_action_list_hierarchy_id).first()
+                    if list_hierarchy:
+                        session.delete(list_hierarchy)
+                        session.commit()
+                        messagebox.showinfo("成功", "列表层级删除成功")
+                        return True
+                elif action_type == "mouse":
+                    action = session.query(ActionMouse).filter_by(id=current_action_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        messagebox.showinfo("成功", "鼠标行为删除成功")
+                        return True
+                elif action_type == "keyboard":
+                    action = session.query(ActionKeyboard).filter_by(id=current_action_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        messagebox.showinfo("成功", "键盘行为删除成功")
+                        return True
+                elif action_type == "class":
+                    action = session.query(ActionClass).filter_by(id=current_action_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        messagebox.showinfo("成功", "类行为删除成功")
+                        return True
+                elif action_type == "ai":
+                    action = session.query(ActionAI).filter_by(id=current_action_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        messagebox.showinfo("成功", "AI行为删除成功")
+                        return True
+                elif action_type == "function":
+                    action = session.query(ActionFunction).filter_by(id=current_action_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        messagebox.showinfo("成功", "函数行为删除成功")
+                        return True
+                elif action_type == "code_text":
+                    action = session.query(ActionCodeTxt).filter_by(id=current_action_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        messagebox.showinfo("成功", "代码文本行为删除成功")
+                        return True
+                elif action_type == "printscreen":
+                    action = session.query(ActionPrintscreen).filter_by(id=current_action_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        messagebox.showinfo("成功", "截图行为删除成功")
+                        return True
+                
                 # 删除行为元记录
-                action = session.query(ActionList).filter_by(id=action_id).first()
+                action = session.query(ActionList).filter_by(id=current_action_id).first()
                 if action:
                     action_name = action.action_name
                     session.delete(action)
@@ -515,8 +573,9 @@ class ActionManager:
                 return False
             
             if self.home_tab.action_operation_type == 1:
-                # 新增保存
+                # 新增保存,不涉及保存列表层级，因为列表层级保存在ActionManager中已经被实现
                 action_list = ActionList(
+                    list_rank_id=self.home_tab.current_action_list_hierarchy_id,
                     group_id=self.home_tab.action_group_id,
                     action_type=self.home_tab.action_type_var.get(),
                     action_name=self.home_tab.action_name_var.get().strip(),
@@ -537,21 +596,30 @@ class ActionManager:
                 
             elif self.home_tab.action_operation_type == 2:
                 # 修改保存
-                action_list = session.query(ActionList).filter_by(id=self.home_tab.current_action_id).first()
-                if action_list:
-                    action_list.action_name = self.home_tab.action_name_var.get().strip()
-                    action_list.next_id = self.home_tab.next_action_var.get().strip() or None
-                    action_list.debug_group_id = self.home_tab.debug_group_id.get().strip() or None
-                    action_list.updated_at = datetime.now()
-                    action_list.action_note = self.home_tab.action_note_var.get().strip()
-                    session.commit()
-                    # 更新详细记录
-                    self._update_action_detail(session, action_list.id)
-                    session.commit()
-                    messagebox.showinfo("成功", "行为修改成功")
+                if not self.home_tab.current_action_id and self.home_tab.current_action_list_hierarchy_id:
+                    # 修改列表层级
+                    list_hierarchy = session.query(ListGroupHierarchy).filter_by(id=self.home_tab.current_action_list_hierarchy_id).first()
+                    if list_hierarchy:
+                        list_hierarchy.list_name = self.home_tab.action_name_var.get().strip()
+                        list_hierarchy.group_note = self.home_tab.action_note_var.get().strip()
+                        session.commit()
+                        messagebox.showinfo("成功", "列表层级修改成功")
                 else:
-                    messagebox.showerror("错误", "未找到要修改的行为")
-                    return False
+                    action_list = session.query(ActionList).filter_by(id=self.home_tab.current_action_id).first()
+                    if action_list:
+                        action_list.action_name = self.home_tab.action_name_var.get().strip()
+                        action_list.next_id = self.home_tab.next_action_var.get().strip() or None
+                        action_list.debug_group_id = self.home_tab.debug_group_id.get().strip() or None
+                        action_list.updated_at = datetime.now()
+                        action_list.action_note = self.home_tab.action_note_var.get().strip()
+                        session.commit()
+                        # 更新详细记录
+                        self._update_action_detail(session, action_list.id)
+                        session.commit()
+                        messagebox.showinfo("成功", "行为修改成功")
+                    else:
+                        messagebox.showerror("错误", "未找到要修改的行为")
+                        return False
             else:
                 messagebox.showerror("错误", "无效的操作类型")
                 return False
@@ -593,6 +661,7 @@ class ActionManager:
     def _set_action_button_state(self,state = None):
         """设置行为按钮状态"""
         if state == 'normal':  
+            self.home_tab.btn_create_action_list_group.config(state='normal')
             self.home_tab.btn_create_action.config(state='normal')
             self.home_tab.btn_record_action.config(state='normal')
             self.home_tab.btn_modify_action.config(state='normal')
@@ -600,6 +669,7 @@ class ActionManager:
             self.home_tab.btn_use_suit.config(state='normal')
             self.home_tab.btn_save_action.config(state='disabled')
         else:
+            self.home_tab.btn_create_action_list_group.config(state='disabled')
             self.home_tab.btn_create_action.config(state='disabled')
             self.home_tab.btn_record_action.config(state='disabled')
             self.home_tab.btn_modify_action.config(state='disabled')
@@ -788,8 +858,8 @@ class ActionManager:
         except Exception as e:
             self.logger.error(f"Error in _on_debug_action_list_select: {e}")
     
-    def _fill_action_data(self, action_type, action_id):
-        """填充行为数据到控件
+    def _fill_action_data(self, action_type, action_id,current_action_list_hierarchy_id):
+        """填充行为数据到控件(因控件填充问题，action_list特有的方法)
         
         Args:
             action_type: 行为类型
@@ -802,7 +872,9 @@ class ActionManager:
                 return
                 
             # 根据行为类型获取对应的数据
-            if action_type == "mouse":
+            if action_type == "list_hierarchy":
+                action_data = session.query(ListGroupHierarchy).filter_by(id =current_action_list_hierarchy_id).first()
+            elif action_type == "mouse":
                 action_data = session.query(ActionMouse).filter_by(action_list_id =action_id).first()
             elif action_type == "keyboard":
                 action_data = session.query(ActionKeyboard).filter_by(action_list_id =action_id).first()
@@ -822,8 +894,13 @@ class ActionManager:
                 session.close()
                 return
                 
-            if action_type == 'mouse':
+            if action_type == "list_hierarchy":
+                self.home_tab.current_action_list_selected_rank = action_data.list_rank
+                self.home_tab.action_list_hierarchy_name_var.set(action_data.list_name)
+                self.home_tab.action_list_hierarchy_note_var.set(action_data.group_note)
+            elif action_type == 'mouse':
                 # 填充鼠标控件数据
+                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_mouse_action_type_var.set(self._mouse_action_to_text(action_data.mouse_action))
                 self.home_tab.action_mouse_size_var.set(action_data.mouse_size)
                 self.home_tab.action_mouse_x_var.set(action_data.x)
@@ -832,18 +909,21 @@ class ActionManager:
                 
             elif action_type == 'keyboard':
                 # 填充键盘控件数据
+                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_keyboard_type_var.set(self._keyboard_type_to_text(action_data.keyboard_type))
                 self.home_tab.action_keyboard_value_var.set(action_data.keyboard_value)
                 self.home_tab.action_keyboard_time_diff_var.set(action_data.time_diff)
                 
             elif action_type == 'class':
                 # 填充类控件数据
+                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_class_name_var.set(action_data.class_name)
                 self.home_tab.action_window_title_var.set(action_data.windows_title)
                 self.home_tab.action_class_time_diff_var.set(action_data.time_diff)
                 
             elif action_type == 'AI':
                 # 填充AI控件数据
+                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_ai_training_group_var.set(action_data.train_group_name)
                 self.home_tab.action_ai_record_name_var.set(action_data.train_long_name)
                 self.home_tab.action_ai_long_text_name_var.set(action_data.long_txt_name)
@@ -853,6 +933,7 @@ class ActionManager:
                 
             elif action_type == 'image':
                 # 填充图像控件数据
+                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_image_left_top_x_var.set(action_data.lux)
                 self.home_tab.action_image_left_top_y_var.set(action_data.luy)
                 self.home_tab.action_image_right_bottom_x_var.set(action_data.rdx)
@@ -864,6 +945,7 @@ class ActionManager:
                 
             elif action_type == 'function':
                 # 填充函数控件数据
+                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_function_name_var.set(action_data.function_name)
                 self.home_tab.action_function_parameters_var.set(action_data.args1)
                 self.home_tab.action_function_arguments_var.set(action_data.args2)
@@ -1301,8 +1383,8 @@ class ActionGroupManager:
             else:
                 logger.info(f"匹配失败 - 期望类名: {class_action.class_name}, 窗口标题: {class_action.windows_title}")
 
-    def get_action_group_data(self, group_id):
-        """获取行为组数据"""
+    def get_action_group_data(self, sheet_name,group_id):
+        """action专有的方法。获取行为组数据,sheet_name为ActionGroup或ActionsDebugGroup或ActionsSuitGroup。group_id为行为组id。"""
         # 首先检查session是否有效
         if not self.is_session_valid():
             # session无效，尝试刷新
@@ -1314,20 +1396,39 @@ class ActionGroupManager:
             return None
             
         try:
-            group = session.query(ActionGroup).filter_by(id=group_id).first()
+            if sheet_name == "ActionGroup":
+                # 获取行为组list_hierarchy
+                list_hierarchy = session.query(ListGroupHierarchy).filter_by(group_id=group_id).all()
+                # 获取行为组
+                group = session.query(ActionGroup).filter_by(id=group_id).first()
+                # 获取关联的层级信息
+                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                # 获取行为列表
+                actions = session.query(ActionList).filter_by(group_id=group_id).all()
+            elif sheet_name == "ActionsDebugGroup":
+                # 获取行为组list_hierarchy
+                list_hierarchy = session.query(ListGroupHierarchy).filter_by(group_id=group_id).all()
+                # 获取行为组
+                group = session.query(ActionGroup).filter_by(id=group_id).first()
+                # 获取关联的层级信息
+                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                # 获取行为列表
+                actions = session.query(ActionList).filter_by(group_id=group_id).all()
+            elif sheet_name == "ActionsSuitGroup":
+                # 获取行为组list_hierarchy
+                list_hierarchy = session.query(ListGroupHierarchy).filter_by(group_id=group_id).all()
+                # 获取行为组
+                group = session.query(ActionsSuitGroup).filter_by(id=group_id).first()
+                # 获取关联的层级信息
+                hierarchy = session.query(ActionsSuitGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                # 获取行为列表
+                actions = session.query(ActionList).filter_by(group_id=group_id).all()
             if not group:
                 return None
-                
-            # 获取关联的层级信息
-            hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
-            
             # 获取用户信息
             user = session.query(User).filter_by(user_id=group.user_id).first()
-            
-            # 获取行为列表
-            actions = session.query(ActionList).filter_by(group_id=group_id).all()
-            
             return {
+                'list_hierarchy': list_hierarchy,
                 'group': group,
                 'hierarchy': hierarchy,
                 'user': user,
@@ -1335,10 +1436,14 @@ class ActionGroupManager:
             }
         except Exception as e:
             print(f"Error getting action group data: {e}")
+            print(traceback.format_exc())
             # 如果是session相关错误，尝试刷新session
             if "session" in str(e).lower() or "connection" in str(e).lower():
                 self.refresh_session()
             return None
+        finally:
+            if session:
+                self._close_session()
     
     def get_hierarchy_data(self, hierarchy_rank):
         """获取层级数据"""
@@ -1352,7 +1457,18 @@ class ActionGroupManager:
         except Exception as e:
             print(f"Error getting hierarchy data: {e}")
             return None
-    
+    def get_list_hierarchy_data(self, hierarchy_rank):
+        """获取层级数据"""
+        session = self._get_session(True)
+        if not session:
+            return None
+            
+        try:
+            hierarchy = session.query(ListGroupHierarchy).filter_by(list_rank=hierarchy_rank).first()
+            return hierarchy
+        except Exception as e:
+            print(f"Error getting hierarchy data: {e}")
+            return None
     def get_all_hierarchies(self):
         """获取所有行为组层级数据
         

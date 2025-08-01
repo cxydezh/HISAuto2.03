@@ -196,7 +196,7 @@ class ActionDebugList(BaseModel):
     next_id = Column(Integer)  # 下一步的行为ID
     back_id = Column(Integer)  # 返回ID
     action_note = Column(String(500))  # 行为元备注
-
+    list_rank_id = Column(Integer,ForeignKey('list_debug_hierarchy.id'))
     # 关系
     mouse_actions = relationship("ActionDebugMouse", back_populates="action_list")
     keyboard_actions = relationship("ActionDebugKeyboard", back_populates="action_list")
@@ -206,7 +206,27 @@ class ActionDebugList(BaseModel):
     function_actions = relationship("ActionDebugFunction", back_populates="action_list")
     class_actions = relationship("ActionDebugClass", back_populates="action_list")
     debug_group = relationship("ActionsDebugGroup", back_populates="action_lists", foreign_keys=[group_id])
+    list_debug_hierarchy = relationship("ListDebugHierarchy", back_populates="action_lists") 
+    def __repr__(self):
+        return f"<ActionDebugList(id={self.id}, name={self.action_name})>"
+class ListDebugHierarchy(BaseModel):
+    """行为组分层"""
+    __tablename__ = 'list_debug_hierarchy'
 
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
+    group_id = Column(Integer, ForeignKey('actions_debug_group.id'))
+    list_name = Column(String(200))  # 组名称
+    list_rank = Column(String(50))  # 组级别
+    sort_num = Column(Integer)  # 排序编码
+    user_id = Column(String(50), ForeignKey('users.user_id'))  # 医生ID
+    department_id = Column(Integer, ForeignKey('departments.code'))  # 科室ID
+    group_note = Column(String(500))  # 组备注
+
+    # 关系
+    action_lists = relationship("ActionDebugList", back_populates="list_debug_hierarchy")
+    action_debug_groups = relationship("ActionsDebugGroup", back_populates="list_debug_hierarchy")
+    def __repr__(self):
+        return f"<ListDebugHierarchy(id={self.id}, name={self.group_name})>" 
 class ActionsDebugGroup(BaseModel):
     """Debug行为组表"""
     __tablename__ = 'actions_debug_group'
@@ -232,7 +252,8 @@ class ActionsDebugGroup(BaseModel):
     action_debug_group_hierarchy = relationship("ActionsDebugGroupHierarchy", back_populates="action_debug_groups")
     user = relationship("User", back_populates="action_debug_groups")
     department = relationship("Department", back_populates="action_debug_groups")
-
+    list_debug_hierarchy = relationship("ListDebugHierarchy", back_populates="action_debug_groups")
+    
 class ActionsDebugGroupHierarchy(BaseModel):
     """Debug行为组分层"""
     __tablename__ = 'actions_debug_group_hierarchy'

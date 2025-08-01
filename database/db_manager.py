@@ -5,7 +5,12 @@ import os
 import sqlite3
 from urllib.parse import quote_plus
 import inspect
+from models.actions import ActionsGroupHierarchy
+from models.action_suit import ActionsSuitGroupHierarchy
+from models.debug_actions import ActionsDebugGroupHierarchy
 from models.base import Base
+from models.department import Department
+from models.user import User
 
 class DatabaseManager:
     """数据库管理类，负责处理数据库连接和会话管理,该类是单例模式,使用时需要先调用initialize方法初始化
@@ -107,45 +112,39 @@ class DatabaseManager:
         if not self.engine:
             raise RuntimeError("Database not initialized")
         self.Base.metadata.create_all(self.engine)
-        
-    def drop_tables(self) -> None:
-        """删除所有数据库表"""
+        self._init_db_data()
+    def _init_db_data(self):
+        """初始化数据库数据"""
         if not self.engine:
             raise RuntimeError("Database not initialized")
-        self.Base.metadata.drop_all(self.engine)
-        
-    def execute_query(self, query: str, params: Optional[dict] = None) -> list:
-        """
-        执行SQL查询
-        
-        Args:
-            query: SQL查询语句
-            params: 查询参数
-            
-        Returns:
-            list: 查询结果
-        """
-        with self.get_session() as session:
-            result = session.execute(text(query), params or {})
-            return result.fetchall()
-            
-    def execute_update(self, query: str, params: Optional[dict] = None) -> int:
-        """
-        执行SQL更新操作
-        
-        Args:
-            query: SQL更新语句
-            params: 更新参数
-            
-        Returns:
-            int: 受影响的行数
-        """
-        with self.get_session() as session:
-            result = session.execute(text(query), params or {})
-            session.commit()
-            return result.rowcount
-            
-    # 组套相关方法
+        session = self.get_session()
+        # 向department表添加一条记录，name：肾病科，code：103006，description：肾病科，updated_at：当前时间,created_at：当前时间;
+        if session.query(Department).count() == 0:
+            session.execute(text("INSERT INTO departments (name, code, description, updated_at, created_at) VALUES ('肾病科', '103006', '肾病科', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+        # 向user表添加一条记录，user_id:1,user_name：admin，user_password：admin，department_id：103006，phone:664927,role:系统管理员，Permission：admin,updated_at：当前时间,created_at：当前时间;
+        if session.query(User).count() == 0:
+            session.execute(text("INSERT INTO users (user_id, username, password, department_id, phone, role, permission, updated_at, created_at) VALUES (1, 'admin', 'admin', 103006, '664927', '系统管理员', 'admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+        # 先检测action_group_hierarchy、action_suit_group_hierarchy、action_debug_group_hierarchy表是否存在记录
+        # 分别向action_group_hierarchy、action_suit_group_hierarchy、action_debug_group_hierarchy表添加3条记录。
+        #第一条记录：group_name：个人，group_rank：A0B0C0D0E0，sort_num：1,updated_at：当前时间,created_at：当前时间;
+        #第二条记录：group_name：科室，group_rank：A1B0C0D0E0，sort_num：2,updated_at：当前时间,created_at：当前时间;
+        #第三条记录：group_name：全局，group_rank：A2B0C0D0E0，sort_num：3,updated_at：当前时间,created_at：当前时间;
+        # 先检测action_group_hierarchy、action_suit_group_hierarchy、action_debug_group_hierarchy表是否存在记录
+        if session.query(ActionsGroupHierarchy).count() == 0:
+            # 添加3条记录
+            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('个人', 'A0B0C0D0E0', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('科室', 'A1B0C0D0E0', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('全局', 'A2B0C0D0E0', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+        if session.query(ActionsSuitGroupHierarchy).count() == 0:
+            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('个人', 'A0B0C0D0E0', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('科室', 'A1B0C0D0E0', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('全局', 'A2B0C0D0E0', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+        if session.query(ActionsDebugGroupHierarchy).count() == 0:
+            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('个人', 'A0B0C0D0E0', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('科室', 'A1B0C0D0E0', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank, sort_num, updated_at, created_at) VALUES ('全局', 'A2B0C0D0E0', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+        session.commit()
+        # 组套相关方法
     def get_all_action_suit_groups(self):
         """获取所有组套"""
         try:

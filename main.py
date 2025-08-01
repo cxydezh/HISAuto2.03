@@ -64,6 +64,7 @@ def initialize_system():
         
     except Exception as e:
         logger.error(f"系统初始化失败: {str(e)}")
+        print(traceback.format_exc())
         raise
     finally:
         #  确保在程序退出时释放数据库资源

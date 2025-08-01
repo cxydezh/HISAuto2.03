@@ -128,6 +128,17 @@ class hometab_funcData:
                 cls.sheet_action_ai = "ActionAI"
                 cls.sheet_action_function = "ActionFunction"
                 cls.sheet_action_class = "ActionClass"
+            elif sheet_type == "Action_list":
+                cls.sheet_list = "ActionList"
+                cls.sheet_listgroup = "ActionGroup"
+                cls.sheet_hierarchy = "ListGroupHierarchy"
+                cls.sheet_action_mouse = "ActionMouse"
+                cls.sheet_action_keyboard = "ActionKeyboard"
+                cls.sheet_action_codetxt = "ActionCodeTxt"
+                cls.sheet_action_printscreen = "ActionPrintscreen"
+                cls.sheet_action_ai = "ActionAI"
+                cls.sheet_action_function = "ActionFunction"
+                cls.sheet_action_class = "ActionClass"
             elif sheet_type == "Action_suit":
                 cls.sheet_list = "ActionsSuitList"
                 cls.sheet_listgroup = "ActionSuitGroup"
@@ -139,10 +150,32 @@ class hometab_funcData:
                 cls.sheet_action_ai = "ActionSuitAI"
                 cls.sheet_action_function = "ActionSuitFunction"
                 cls.sheet_action_class = "ActionSuitClass"
+            elif sheet_type == "Action_suit_list":
+                cls.sheet_list = "ActionsSuitList"
+                cls.sheet_listgroup = "ActionSuitGroup"
+                cls.sheet_hierarchy = "ListSuitHierarchy"
+                cls.sheet_action_mouse = "ActionSuitMouse"
+                cls.sheet_action_keyboard = "ActionSuitKeyboard"
+                cls.sheet_action_codetxt = "ActionSuitCodeTxt"
+                cls.sheet_action_printscreen = "ActionSuitPrintscreen"
+                cls.sheet_action_ai = "ActionSuitAI"
+                cls.sheet_action_function = "ActionSuitFunction"
+                cls.sheet_action_class = "ActionSuitClass"
             elif sheet_type == "debug_action":
                 cls.sheet_list = "ActionDebugList"
                 cls.sheet_listgroup = "ActionDebugGroup"
                 cls.sheet_hierarchy = "ActionsDebugGroupHierarchy"
+                cls.sheet_action_mouse = "ActionDebugMouse"
+                cls.sheet_action_keyboard = "ActionDebugKeyboard"
+                cls.sheet_action_codetxt = "ActionDebugCodeTxt"
+                cls.sheet_action_printscreen = "ActionDebugPrintscreen"
+                cls.sheet_action_ai = "ActionDebugAI"
+                cls.sheet_action_function = "ActionDebugFunction"
+                cls.sheet_action_class = "ActionDebugClass"
+            elif sheet_type == "debug_action_list":
+                cls.sheet_list = "ActionDebugList"
+                cls.sheet_listgroup = "ActionDebugGroup"
+                cls.sheet_hierarchy = "ListDebugHierarchy"
                 cls.sheet_action_mouse = "ActionDebugMouse"
                 cls.sheet_action_keyboard = "ActionDebugKeyboard"
                 cls.sheet_action_codetxt = "ActionDebugCodeTxt"
@@ -192,6 +225,81 @@ class hometab_funcData:
                 else:
                     logger.error(f"无法找到行为组记录: {action_group_id}")
                     return False
+            elif action_tree_selected_iid.startswith("action_"):
+                #删除action_list表的记录
+                action = session.query(list_model).filter_by(id=action_group_id).first()
+                if action:
+                    if action.action_type == "mouse":
+                        action = session.query(mouse_model).filter_by(id=action_group_id).first()
+                    elif action.action_type == "keyboard":
+                        action = session.query(keyboard_model).filter_by(id=action_group_id).first()
+                    elif action.action_type == "code_text":
+                        action = session.query(codetxt_model).filter_by(id=action_group_id).first()
+                    elif action.action_type == "printscreen":
+                        action = session.query(printscreen_model).filter_by(id=action_group_id).first()
+                    elif action.action_type == "ai":
+                        action = session.query(ai_model).filter_by(id=action_group_id).first()
+                    elif action.action_type == "function":
+                        action = session.query(function_model).filter_by(id=action_group_id).first()
+                    elif action.action_type == "class":
+                        action = session.query(class_model).filter_by(id=action_group_id).first()
+                    if action:
+                        session.delete(action)
+                        session.commit()
+                        logger.info(f"成功删除行为元: {action.action_name}")
+                    else:
+                        logger.error(f"无法找到行为元记录: {action_group_id}")
+                        return False
+            elif action_tree_selected_iid.startswith("hierarchy_"):
+                #删除list_group_hierarchy表的记录
+                # 通过递归删除list_group_hierarchy表中相关的记录和子记录，同时删除相对应的ActionGroup表中的记录
+                # 查询当前层次
+                hierarchy = session.query(hierarchy_model).filter_by(id=action_group_hierarchy_id).first()
+                if not hierarchy:
+                    return False
+                
+                # 删除当前action_list_group表的记录
+                groups = session.query(listgroup_model).filter_by(id=action_group_id).all()
+                for group in groups:
+                    group_name = group.action_list_group_name
+                    actions = session.query(list_model).filter_by(group_id=group.id).all()
+                    for action in actions:
+                        #删除行为元关联的子行为元
+                        cls._delete_action(session, action.id, action.action_type,
+                                         mouse_model, keyboard_model, codetxt_model, 
+                                         printscreen_model, ai_model, function_model, class_model)
+                        session.delete(action)
+                        session.commit()
+                    session.delete(group)
+                    session.commit()
+                    logger.info(f"成功删除行为组: {group_name}")
+                
+                # 删除当前层次
+                session.delete(hierarchy)
+                session.commit()
+                
+                # 查询所有子层级记录
+                hierarchy_parse_rank = parse_group_rank(hierarchy.list_rank)
+                child_hierarchy_groups = session.query(hierarchy_model).filter(
+                    hierarchy_model.list_rank.contains(hierarchy_parse_rank)
+                ).all()
+                
+                for child_hierarchy_group in child_hierarchy_groups:
+                    rank = parse_group_rank(child_hierarchy_group.list_rank)
+                    
+                    # 确定父节点key和当前节点iid
+                    if rank['E'] > 0:
+                        child_hierarchy_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E{rank['E']}"
+                    elif rank['D'] > 0:
+                        child_hierarchy_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+                    elif rank['C'] > 0:
+                        child_hierarchy_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+                    elif rank['B'] > 0:
+                        child_hierarchy_iid = f"A{rank['A']}B{rank['B']}"
+                    else:
+                        continue
+                    cls.delete_action_group(sheet_type, child_hierarchy_iid, child_hierarchy_group.id, child_hierarchy_group.id)
+                return True
             elif action_tree_selected_iid.startswith("A"):
                 # 通过递归删除ActionsGroupHierarchy表中相关的记录和子记录，同时删除相对应的ActionGroup表中的记录
                 # 查询当前层次
@@ -470,8 +578,8 @@ class hometab_funcData:
             print(traceback.format_exc())
             return False
     @classmethod
-    def _load_action_group_data(cls, sheet_type, action_treeview):
-        """加载行为组数据,其中sheet_type:行为组表类型（如Action,Action_suit,debug_action）,action_treeview:行为组树视图"""
+    def _load_action_group_data(cls, sheet_type, action_treeview,action_list_id=None):
+        """加载行为组数据,其中sheet_type:行为组表类型（如Action,Action_list,Action_suit,Action_suit_list,debug_action,debug_action_list）,action_treeview:行为组树视图"""
         try:
             session = cls._get_session()
             if not session:
@@ -480,11 +588,20 @@ class hometab_funcData:
             if sheet_type == "Action":
                 cls.sheet_listgroup = "ActionGroup"
                 cls.sheet_hierarchy = "ActionsGroupHierarchy"
+            elif sheet_type == "Action_list":
+                cls.sheet_listgroup = "ActionListGroup"
+                cls.sheet_hierarchy = "ActionsGroupHierarchy"
             elif sheet_type == "Action_suit":
                 cls.sheet_listgroup = "ActionSuitGroup"
                 cls.sheet_hierarchy = "ActionsSuitGroupHierarchy"
+            elif sheet_type == "Action_suit_list":
+                cls.sheet_listgroup = "ActionSuitListGroup"
+                cls.sheet_hierarchy = "ActionsSuitGroupHierarchy"
             elif sheet_type == "debug_action":
                 cls.sheet_listgroup = "ActionDebugGroup"
+                cls.sheet_hierarchy = "ActionsDebugGroupHierarchy"
+            elif sheet_type == "debug_action_list":
+                cls.sheet_listgroup = "ActionDebugListGroup"
                 cls.sheet_hierarchy = "ActionsDebugGroupHierarchy"
             else:
                 logger.error(f"无效的行为组类型: {sheet_type}")
@@ -501,7 +618,10 @@ class hometab_funcData:
             cls.action_treeview.delete(*cls.action_treeview.get_children())
             # 获取所有层级数据
             hierarchy_groups = {}
-            hierarchies = session.query(cls.sheet_hierarchy_model).all()
+            if sheet_type == "Action_list" or sheet_type == "Action_suit_list" or sheet_type == "debug_action_list":
+                hierarchies = session.query(cls.sheet_hierarchy_model).filter_by(group_id=action_list_id).all()
+            else:
+                hierarchies = session.query(cls.sheet_hierarchy_model).all()
             for hierarchy in hierarchies:
                 rank_dict = parse_group_rank(hierarchy.group_rank)
                 parent_key = cls._get_parent_key(rank_dict)
@@ -581,6 +701,7 @@ class hometab_funcData:
             logger.error(f"加载行为组数据失败: {str(e)}")
             print(traceback.format_exc())
         finally:
+            print("加载行为组数据成功-强制关闭session")
             session.close()
     @classmethod
     def build_tree_structure(self, hierarchies):
