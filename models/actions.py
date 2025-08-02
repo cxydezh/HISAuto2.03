@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Float, DateTime, Tex
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from models.base import BaseModel
+from utils import logger
 
 class ActionMouse(BaseModel):
     """行为操作表_鼠标"""
@@ -13,7 +14,7 @@ class ActionMouse(BaseModel):
     x = Column(Integer)  # 鼠标X坐标
     y = Column(Integer)  # 鼠标Y坐标
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_list.id'))  # 外键，与ActionList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_list.id',ondelete='CASCADE'))  # 外键，与ActionList中的ID关联
 
     # 关系
     action_list = relationship("ActionList", back_populates="mouse_actions")
@@ -44,7 +45,7 @@ class ActionKeyboard(BaseModel):
     keyboard_type = Column(Integer, nullable=False)  # 键盘类型(1:按下,2:释放,3:单击,4:文本)
     keyboard_value = Column(String(500))  # 按键值或文本内容
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_list.id'))  # 外键，与ActionList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_list.id',ondelete='CASCADE'))  # 外键，与ActionList中的ID关联
 
     # 关系
     action_list = relationship("ActionList", back_populates="keyboard_actions")
@@ -73,7 +74,7 @@ class ActionCodeTxt(BaseModel):
     code_text = Column(String(500))  # 密码文本(SHA256保存)
     code_tips = Column(String(500))  # 密码文本的提示文本内容
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_list.id'))  # 外键，与ActionList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_list.id',ondelete='CASCADE'))  # 外键，与ActionList中的ID关联
 
     # 关系
     action_list = relationship("ActionList", back_populates="code_text_actions")
@@ -108,7 +109,7 @@ class ActionPrintscreen(BaseModel):
     match_text = Column(String(500))  # 匹配的文本信息
     mouse_action = Column(Integer, default=0)  # 鼠标动作(0:无,1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_list.id'))  # 外键，与ActionList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_list.id',ondelete='CASCADE'))  # 外键，与ActionList中的ID关联
 
     # 关系
     action_list = relationship("ActionList", back_populates="printscreen_actions")
@@ -140,7 +141,7 @@ class ActionAI(BaseModel):
     ai_illustration = Column(String(1000))  # AI网页输入框输入的文本内容
     ai_note = Column(String(500))  # 备注信息
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_list.id'))  # 外键，与ActionList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_list.id',ondelete='CASCADE'))  # 外键，与ActionList中的ID关联
 
     # 关系
     action_list = relationship("ActionList", back_populates="ai_actions")
@@ -160,7 +161,7 @@ class ActionFunction(BaseModel):
     args2 = Column(String(500))  # 函数参数2
     args_list = Column(String(500))  # 函数参数列表所在位置
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_list.id'))  # 外键，与ActionList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_list.id',ondelete='CASCADE'))  # 外键，与ActionList中的ID关联
 
     # 关系
     action_list = relationship("ActionList", back_populates="function_actions")
@@ -178,7 +179,7 @@ class ActionClass(BaseModel):
     class_name = Column(String(200))  # 类名
     windows_title = Column(String(500))  # 窗体名
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_list.id'))  # 外键，与ActionList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_list.id',ondelete='CASCADE'))  # 外键，与ActionList中的ID关联
 
     # 关系
     action_list = relationship("ActionList", back_populates="class_actions")
@@ -193,13 +194,13 @@ class ActionList(BaseModel):
     __tablename__ = 'action_list'
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
-    group_id = Column(Integer,ForeignKey('action_list_group.id'))  # 行为组的编号
+    group_id = Column(Integer,ForeignKey('action_list_group.id'),ondelete='CASCADE')  # 行为组的编号
     action_type = Column(String(50), nullable=False)  # 行为类型
     action_name = Column(String(200))  # 行为名称
     next_id = Column(Integer)  # 下一步ID
     debug_group_id = Column(Integer)  # Debug调试用ID
     action_note = Column(String(500))  # 行为元备注
-    list_rank_id = Column(Integer,ForeignKey('list_group_hierarchy.id'))
+    list_rank_id = Column(Integer,ForeignKey('list_group_hierarchy.id',ondelete='CASCADE'))
     # 关系
     mouse_actions = relationship("ActionMouse", back_populates="action_list")
     keyboard_actions = relationship("ActionKeyboard", back_populates="action_list")
@@ -212,12 +213,13 @@ class ActionList(BaseModel):
     list_group_hierarchy = relationship("ListGroupHierarchy", back_populates="action_lists")
     def __repr__(self):
         return f"<ActionList(id={self.id}, name={self.action_name})>"
+
 class ListGroupHierarchy(BaseModel):
     """行为组分层"""
     __tablename__ = 'list_group_hierarchy'
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
-    group_id = Column(Integer,ForeignKey('action_list_group.id'))
+    group_id = Column(Integer,ForeignKey('action_list_group.id'),ondelete='CASCADE')
     list_name = Column(String(200))  # 组名称
     list_rank = Column(String(50))  # 组级别
     sort_num = Column(Integer)  # 排序编码
@@ -237,7 +239,7 @@ class ActionGroup(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)
     sort_num = Column(Integer)
     action_list_group_name = Column(String(200))
-    group_rank_id = Column(Integer,ForeignKey('actions_group_hierarchy.id'))
+    group_rank_id = Column(Integer,ForeignKey('actions_group_hierarchy.id'),ondelete='CASCADE')
     excel_name = Column(String(200))
     excel_sheet_num = Column(Integer)
     excel_column = Column(Integer)

@@ -10,7 +10,7 @@ class ActionDebugMouse(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     mouse_action = Column(Integer, nullable=False)  # 鼠标动作(1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
     mouse_size = Column(Float)  # 鼠标动作大小(用于记录滚轮动作的大小)
-    action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_debug_list.id',ondelete='CASCADE'))  # 外键，与ActionDebugList中的ID关联
 
     def get_action_by_group_id(group_id):
         from database.db_manager import DatabaseManager 
@@ -36,7 +36,7 @@ class ActionDebugKeyboard(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     keyboard_type = Column(Integer, nullable=False)  # 键盘类型(1:按下,2:释放,3:单击,4:文本)
     keyboard_value = Column(String(500))  # 按键值或文本内容
-    action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_debug_list.id',ondelete='CASCADE'))  # 外键，与ActionDebugList中的ID关联
 
     def get_action_by_group_id(group_id):
         from database.db_manager import DatabaseManager 
@@ -62,7 +62,7 @@ class ActionDebugCodeTxt(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     code_text = Column(String(500))  # 密码文本(SHA256保存)
     code_tips = Column(String(500))  # 密码文本的提示文本内容
-    action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_debug_list.id',ondelete='CASCADE'))  # 外键，与ActionDebugList中的ID关联
 
     def get_action_by_group_id(group_id):
         from database.db_manager import DatabaseManager 
@@ -92,7 +92,7 @@ class ActionDebugPrintscreen(BaseModel):
     rdy = Column(Integer)  # 截屏右下角y坐标
     pic_location = Column(String(200))  # 图片位置
     mouse_action = Column(Integer, default=0)  # 鼠标动作(0:无,1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
-    action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_debug_list.id',ondelete='CASCADE'))  # 外键，与ActionDebugList中的ID关联
 
     def get_action_by_group_id(group_id):
         from database.db_manager import DatabaseManager 
@@ -148,7 +148,7 @@ class ActionDebugAI(BaseModel):
     ai_illustration = Column(String(1000))  # AI网页输入框输入的文本内容
     ai_note = Column(String(500))  # 备注信息
     time_diff = Column(Float)  # 与上一个动作的时间差
-    action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_debug_list.id',ondelete='CASCADE'))  # 外键，与ActionDebugList中的ID关联
 
     # 关系
     action_list = relationship("ActionDebugList", back_populates="ai_actions")
@@ -166,7 +166,7 @@ class ActionDebugClass(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     class_name = Column(String(200))  # 类名
     windows_title = Column(String(500))  # 窗体名
-    action_list_id = Column(Integer, ForeignKey('action_debug_list.id'))  # 外键，与ActionDebugList中的ID关联
+    action_list_id = Column(Integer, ForeignKey('action_debug_list.id',ondelete='CASCADE'))  # 外键，与ActionDebugList中的ID关联
 
     def get_action_by_group_id(group_id):   
         from database.db_manager import DatabaseManager 
@@ -190,13 +190,13 @@ class ActionDebugList(BaseModel):
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
-    group_id = Column(Integer, ForeignKey('actions_debug_group.id'))  # 行为组的编号
+    group_id = Column(Integer, ForeignKey('actions_debug_group.id',ondelete='CASCADE'))  # 行为组的编号
     action_type = Column(String(50), nullable=False)  # 行为类型
     action_name = Column(String(200))  # 行为名称
     next_id = Column(Integer)  # 下一步的行为ID
     back_id = Column(Integer)  # 返回ID
     action_note = Column(String(500))  # 行为元备注
-    list_rank_id = Column(Integer,ForeignKey('list_debug_hierarchy.id'))
+    list_rank_id = Column(Integer,ForeignKey('list_debug_hierarchy.id',ondelete='CASCADE'))
     # 关系
     mouse_actions = relationship("ActionDebugMouse", back_populates="action_list")
     keyboard_actions = relationship("ActionDebugKeyboard", back_populates="action_list")
@@ -214,7 +214,7 @@ class ListDebugHierarchy(BaseModel):
     __tablename__ = 'list_debug_hierarchy'
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
-    group_id = Column(Integer, ForeignKey('actions_debug_group.id'))
+    group_id = Column(Integer, ForeignKey('actions_debug_group.id',ondelete='CASCADE'))
     list_name = Column(String(200))  # 组名称
     list_rank = Column(String(50))  # 组级别
     sort_num = Column(Integer)  # 排序编码
@@ -245,7 +245,7 @@ class ActionsDebugGroup(BaseModel):
     user_id = Column(Integer, ForeignKey('users.id'))  # 用户ID
     department_id = Column(Integer, ForeignKey('departments.code'))  # 科室code 
     action_list_group_note = Column(String(500))  # 行为组备注
-    action_debug_group_hierarchy_id = Column(Integer, ForeignKey('actions_debug_group_hierarchy.id'))  # 外键，与ActionsDebugGroupHierarchy中的ID关联
+    action_debug_group_hierarchy_id = Column(Integer, ForeignKey('actions_debug_group_hierarchy.id',ondelete='CASCADE'))  # 外键，与ActionsDebugGroupHierarchy中的ID关联
 
     # 关系
     action_lists = relationship("ActionDebugList", back_populates="debug_group", foreign_keys="[ActionDebugList.group_id]")
