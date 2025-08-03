@@ -490,7 +490,7 @@ class DatabaseManager:
         """
         获取分组内所有记录的链表顺序
         :param group_id: 分组ID
-        :return: 记录ID列表，按链表顺序排列
+        :return: 记录列表，按链表顺序排列
         """
         with self.get_session() as session:
             if list_group_name in ["ActionList","ActionSuitList","ActionDebugList"]:
@@ -513,7 +513,7 @@ class DatabaseManager:
             chain = []
             current = head
             while current:
-                chain.append(current.id)
+                chain.append(current)
                 current = record_map.get(current.next_id) if current.next_id else None
             
             return chain

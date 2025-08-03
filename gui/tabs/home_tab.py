@@ -684,7 +684,6 @@ class HomeTab(BaseTab):
         )
         if file_path:
             self.excel_path_var.set(file_path)
-    
     def _on_action_tree_select(self, event=None):
         """行为组树选择事件处理"""
         selected = self.action_tree.selection()
@@ -737,11 +736,11 @@ class HomeTab(BaseTab):
                     # 填充action_list_tree
                     self.action_list.delete(*self.action_list.get_children())
                     # 先把list_hierarchy填充到action_list_tree
-                    for list_hierarchy in list_hierarchy:
-                        temp_list_hierarchy_rank = list_hierarchy.list_rank
+                    for one_list_hierarchy in list_hierarchy:
+                        temp_list_hierarchy_rank = one_list_hierarchy.list_rank
                         if "B0" in temp_list_hierarchy_rank:
-                            self.action_list.insert("", "end", iid=str("hierarchy_"+str(list_hierarchy.id)), values=(
-                                list_hierarchy.list_name, "list_hierarchy", list_hierarchy.group_note
+                            self.action_list.insert("", "end", iid=str("hierarchy_"+str(one_list_hierarchy.id)), values=(
+                                one_list_hierarchy.list_name, "list_hierarchy", one_list_hierarchy.group_note
                             ))
                         else:
                             # 获取list_hierarchy的父节点
@@ -761,6 +760,7 @@ class HomeTab(BaseTab):
                                 list_hierarchy.list_name, "list_hierarchy", list_hierarchy.group_note
                             ))
                     # 再把actions填充到action_list_tree
+                    
                     for action in actions:
                         self.action_list.insert(str("hierarchy_"+str(action.list_rank_id)), "end", iid=str("action_"+str(action.id)), text="📄",  values=(
                             action.action_name, action.action_type,action.action_note
@@ -830,7 +830,6 @@ class HomeTab(BaseTab):
             self.btn_run_action_group.config(state='normal')
         else:
             self.btn_run_action_group.config(state='disabled')
-    
     @prevent_double_click(interval=1.0)
     def _refresh_action_group(self):
         """刷新行为组树，按GroupRank分层显示"""
