@@ -11,8 +11,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 import pyautogui
 from pynput import mouse, keyboard
-import win32gui
-import win32api
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
 from gui.tabs.home_tab import prevent_double_click

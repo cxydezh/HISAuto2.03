@@ -12,8 +12,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 import pyautogui
 from pynput import mouse, keyboard
-import win32gui
-import win32api
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
 from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt

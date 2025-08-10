@@ -194,7 +194,7 @@ class ActionList(BaseModel):
     __tablename__ = 'action_list'
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
-    group_id = Column(Integer,ForeignKey('action_list_group.id'),ondelete='CASCADE')  # 行为组的编号
+    group_id = Column(Integer, ForeignKey('action_list_group.id', ondelete='CASCADE'))  # 行为组的编号
     action_type = Column(String(50), nullable=False)  # 行为类型
     action_name = Column(String(200))  # 行为名称
     next_id = Column(Integer)  # 下一步ID
@@ -219,7 +219,7 @@ class ListGroupHierarchy(BaseModel):
     __tablename__ = 'list_group_hierarchy'
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
-    group_id = Column(Integer,ForeignKey('action_list_group.id'),ondelete='CASCADE')
+    group_id = Column(Integer,ForeignKey('action_list_group.id',ondelete='CASCADE'))
     list_name = Column(String(200))  # 组名称
     list_rank = Column(String(50))  # 组级别
     sort_num = Column(Integer)  # 排序编码
@@ -239,7 +239,7 @@ class ActionGroup(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)
     sort_num = Column(Integer)
     action_list_group_name = Column(String(200))
-    group_rank_id = Column(Integer,ForeignKey('actions_group_hierarchy.id'),ondelete='CASCADE')
+    group_rank_id = Column(Integer,ForeignKey('actions_group_hierarchy.id',ondelete='CASCADE'))
     excel_name = Column(String(200))
     excel_sheet_num = Column(Integer)
     excel_column = Column(Integer)

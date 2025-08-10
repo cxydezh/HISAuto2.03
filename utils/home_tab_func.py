@@ -11,8 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 import pyautogui
 from pynput import mouse, keyboard
-import win32gui
-import win32api
+import win32gui  # type: ignore
+import win32api  # type: ignore
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
 from models.action_suit import ActionsSuitGroup, ActionsSuitGroupHierarchy
@@ -1457,14 +1457,14 @@ class ActionGroupManager:
         except Exception as e:
             print(f"Error getting hierarchy data: {e}")
             return None
-    def get_list_hierarchy_data(self, hierarchy_rank):
+    def get_list_hierarchy_data(self, hierarchy_rank,group_id):
         """获取层级数据"""
         session = self._get_session(True)
         if not session:
             return None
             
         try:
-            hierarchy = session.query(ListGroupHierarchy).filter_by(list_rank=hierarchy_rank).first()
+            hierarchy = session.query(ListGroupHierarchy).filter_by(list_rank=hierarchy_rank,group_id=group_id).first()
             return hierarchy
         except Exception as e:
             print(f"Error getting hierarchy data: {e}")

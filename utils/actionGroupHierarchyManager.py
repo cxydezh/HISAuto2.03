@@ -128,7 +128,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num >= self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num >= self.hierarchy_sort:
                                     record.sort_num += 1
                         else:
                             if (pro_first_key in temp_group_rank_dict and 
@@ -140,7 +140,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num >= self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num >= self.hierarchy_sort:
                                     record.sort_num += 1
 
                     #提交修改事务
@@ -206,7 +206,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num > self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num > self.hierarchy_sort: 
                                     record.sort_num += 1
                         else:
                             if (pro_first_key in temp_group_rank_dict and 
@@ -218,7 +218,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num > self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num > self.hierarchy_sort:
                                     record.sort_num += 1
 
                     #提交修改事务
@@ -281,7 +281,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的next_first_key_value
                                 if next_first_key_value > max_first_key_value:
                                     max_first_key_value = next_first_key_value
-                                if record.sort_num > max_sort_num:
+                                if record.sort_num is not None and record.sort_num > max_sort_num:
                                     max_sort_num = record.sort_num
                         else:
                             if (first_key in temp_group_rank_dict and 
@@ -293,7 +293,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if first_key_value > max_first_key_value:
                                     max_first_key_value = first_key_value
-                                if record.sort_num > max_sort_num:
+                                if record.sort_num is not None and record.sort_num > max_sort_num:
                                     max_sort_num = record.sort_num
                     #创建新的group_rank
                     temp_group_rank_str3 = self.action_group_selected_rank
@@ -361,7 +361,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num >= self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num >= self.hierarchy_sort:
                                     record.sort_num += 1
                         else:
                             if (pro_first_key in temp_group_rank_dict and 
@@ -373,7 +373,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num >= self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num >= self.hierarchy_sort:
                                     record.sort_num += 1
                     #提交修改事务
                     session.commit()
@@ -436,7 +436,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num > self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num > self.hierarchy_sort:
                                     record.sort_num += 1
                         else:
                             if (pro_first_key in temp_group_rank_dict and 
@@ -448,7 +448,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if pro_first_key_value > max_first_key_value:
                                     max_first_key_value = pro_first_key_value
-                                if record.sort_num > self.hierarchy_sort:
+                                if record.sort_num is not None and record.sort_num > self.hierarchy_sort:
                                     record.sort_num += 1
                     #提交修改事务
                     session.commit()
@@ -510,7 +510,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if first_key_value > max_first_key_value:
                                     max_first_key_value = first_key_value
-                                if record.sort_num > max_sort_num:
+                                if record.sort_num is not None and record.sort_num > max_sort_num:
                                     max_sort_num = record.sort_num
                         else:
                             if (first_key in temp_group_rank_dict and 
@@ -522,7 +522,7 @@ class ActionGroupHierarchy_Manager:
                                 #递归获取最大的first_key_value
                                 if first_key_value > max_first_key_value:
                                     max_first_key_value = first_key_value
-                                if record.sort_num > max_sort_num:
+                                if record.sort_num is not None and record.sort_num > max_sort_num:  
                                     max_sort_num = record.sort_num
 
                     #创建新的group_rank

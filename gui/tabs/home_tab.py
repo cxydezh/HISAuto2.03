@@ -755,10 +755,11 @@ class HomeTab(BaseTab):
                                         pro_rank_iid =concat( pro_rank_iid + pro_key,str(temp_list_hierarchy_rank[pro_key]))
                                     pro_key = key
                             pro_rank = iid_to_group_rank(pro_rank_iid)
-                            pro_rank_action_list_hierarchy = self.action_group_manager.get_list_hierarchy_data(pro_rank)
-                            self.action_list.insert(str("hierarchy_"+str(pro_rank_action_list_hierarchy.id)), "end", iid=str("hierarchy_"+str(list_hierarchy.id)), text="📁", values=(
-                                list_hierarchy.list_name, "list_hierarchy", list_hierarchy.group_note
-                            ))
+                            pro_rank_action_list_hierarchy = self.action_group_manager.get_list_hierarchy_data(pro_rank,group_id)
+                            if pro_rank_action_list_hierarchy:
+                                self.action_list.insert(str("hierarchy_"+str(pro_rank_action_list_hierarchy.id)), "end", iid=str("hierarchy_"+str(one_list_hierarchy.id)), text="📁", values=(
+                                    one_list_hierarchy.list_name, "list_hierarchy", one_list_hierarchy.group_note
+                                ))
                     # 再把actions填充到action_list_tree
                     
                     for action in actions:
