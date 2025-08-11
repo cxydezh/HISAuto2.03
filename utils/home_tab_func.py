@@ -857,6 +857,16 @@ class ActionManager:
             session.close()
         except Exception as e:
             self.logger.error(f"Error in _on_debug_action_list_select: {e}")
+    def _get_action_list_rank(self,hierarchy_id):
+        """获取行为列表的等级"""
+        session = self._get_session()
+        if not session:
+            return
+        hierarchy = session.query(ListGroupHierarchy).filter_by(id=hierarchy_id).first()
+        if hierarchy:
+            return hierarchy.list_rank
+        else:
+            return None
     
     def _fill_action_data(self, action_type, action_id,current_action_list_hierarchy_id):
         """填充行为数据到控件(因控件填充问题，action_list特有的方法)
@@ -900,7 +910,6 @@ class ActionManager:
                 self.home_tab.action_list_hierarchy_note_var.set(action_data.group_note)
             elif action_type == 'mouse':
                 # 填充鼠标控件数据
-                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_mouse_action_type_var.set(self._mouse_action_to_text(action_data.mouse_action))
                 self.home_tab.action_mouse_size_var.set(action_data.mouse_size)
                 self.home_tab.action_mouse_x_var.set(action_data.x)
@@ -909,21 +918,18 @@ class ActionManager:
                 
             elif action_type == 'keyboard':
                 # 填充键盘控件数据
-                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_keyboard_type_var.set(self._keyboard_type_to_text(action_data.keyboard_type))
                 self.home_tab.action_keyboard_value_var.set(action_data.keyboard_value)
                 self.home_tab.action_keyboard_time_diff_var.set(action_data.time_diff)
                 
             elif action_type == 'class':
                 # 填充类控件数据
-                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_class_name_var.set(action_data.class_name)
                 self.home_tab.action_window_title_var.set(action_data.windows_title)
                 self.home_tab.action_class_time_diff_var.set(action_data.time_diff)
                 
             elif action_type == 'AI':
                 # 填充AI控件数据
-                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_ai_training_group_var.set(action_data.train_group_name)
                 self.home_tab.action_ai_record_name_var.set(action_data.train_long_name)
                 self.home_tab.action_ai_long_text_name_var.set(action_data.long_txt_name)
@@ -933,7 +939,6 @@ class ActionManager:
                 
             elif action_type == 'image':
                 # 填充图像控件数据
-                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_image_left_top_x_var.set(action_data.lux)
                 self.home_tab.action_image_left_top_y_var.set(action_data.luy)
                 self.home_tab.action_image_right_bottom_x_var.set(action_data.rdx)
@@ -945,7 +950,6 @@ class ActionManager:
                 
             elif action_type == 'function':
                 # 填充函数控件数据
-                self.home_tab.current_action_list_selected_rank = action_data.list_rank
                 self.home_tab.action_function_name_var.set(action_data.function_name)
                 self.home_tab.action_function_parameters_var.set(action_data.args1)
                 self.home_tab.action_function_arguments_var.set(action_data.args2)

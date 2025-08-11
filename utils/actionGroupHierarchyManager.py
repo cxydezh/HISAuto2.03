@@ -86,7 +86,7 @@ class ActionGroupHierarchy_Manager:
                     #获取group_rank_dict的第一个Value为0的key值
                     first_key = ""
                     for key, value in group_rank_dict.items():
-                        if value == 0 and key != "A":#因为A是根节点，不能插入到A上方，A0是个人行为组集合
+                        if value == 0 :
                             first_key = key
                             break
                         if key == "E":
@@ -163,7 +163,7 @@ class ActionGroupHierarchy_Manager:
                     #获取group_rank_dict的第一个Value为0的key值
                     first_key = ""
                     for key, value in group_rank_dict.items():
-                        if value == 0 and key != "A":
+                        if value == 0:
                             first_key = key
                             break
                         if key == "E":
@@ -241,7 +241,7 @@ class ActionGroupHierarchy_Manager:
                     #获取group_rank_dict的第一个Value为0的key值
                     first_key = ""
                     for key, value in group_rank_dict.items():
-                        if value == 0 and key != "A":
+                        if value == 0:
                             first_key = key
                             break
                         if key == "E":
@@ -311,7 +311,7 @@ class ActionGroupHierarchy_Manager:
                 elif self.relate_location_selected == 4:
                     #插入项
                     #获取group_rank_dict的第一个Value为0的key值
-                    self.group_rank = "A0B0C0D0E0"
+                    self.group_rank = "A1B0C0D0E0"
                     self.sort_num = 1
             else:
                 #根据self.action_group_selected_rank和self.relate_location_selected获取行为组Hierarchy级别

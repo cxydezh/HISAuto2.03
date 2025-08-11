@@ -1464,6 +1464,7 @@ class HomeTab(BaseTab):
             if parent_selected_iid:
                 if parent_selected_iid.startswith("hierarchy_"):
                     self.current_action_list_hierarchy_id = parent_selected_iid.split("_")[1]
+                    self.current_action_list_hierarchy_rank = self.action_manager._get_action_list_rank(self.current_action_list_hierarchy_id)
                 else:
                     self.current_action_list_hierarchy_id = None
             else:
@@ -1518,7 +1519,7 @@ class HomeTab(BaseTab):
         from utils.actionGroupHierarchyManager import ActionGroupHierarchy_Manager
         #调用ActionGroupHierarchy_Manager方法，新建行为组组套
         ActionGroupHierarchy_Manager(self.my_window, "ListGroupHierarchy",
-                                      self.action_group_selected_rank, self.relate_location_selected_action_list,
+                                      self.current_action_list_selected_rank, self.relate_location_selected_action_list,
                                       self.hierarchy_sort,is_action_list=True,action_group_id=self.action_group_id)
 
         #刷新行为组树

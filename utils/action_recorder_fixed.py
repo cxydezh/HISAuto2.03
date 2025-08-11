@@ -10,8 +10,8 @@ import os
 import sys
 import time
 import threading
-import keyboard
-import mouse
+from pynput import keyboard, mouse
+from pynput.mouse import Controller as MouseController
 from config.config_manager import ConfigManager
 from database.db_manager import DatabaseManager
 from models.actions import ActionList, ActionMouse, ActionKeyboard
@@ -191,6 +191,9 @@ class ActionRecorder:
             # 创建图标标签
             icon_label = tk.Label(self.icon_window, text="●", fg="red", bg="white", font=("Arial", 12, "bold"))
             icon_label.pack(fill=tk.BOTH, expand=True)
+            
+            # 初始化鼠标控制器
+            self.mouse_controller = MouseController()
             
             # 绑定双击事件 - 恢复窗口
             icon_label.bind('<Double-Button-1>', self.restore_window)
@@ -432,10 +435,16 @@ class ActionRecorder:
         """
         try:
             # 设置录制选项
-            self._mouse_hook = self._mouse_event_handler
-            mouse.hook(self._mouse_hook)
-            keyboard.on_press(self._on_key_press)
-            keyboard.on_release(self._on_key_release)
+            self._mouse_listener = mouse.Listener(on_click=self._mouse_event_handler)
+            self._keyboard_listener = keyboard.Listener(
+                on_press=self._on_key_press,
+                on_release=self._on_key_release
+            )
+            
+            # 启动监听器
+            self._mouse_listener.start()
+            self._keyboard_listener.start()
+            
             self._monitor_end_key(end_record_key)
         except Exception as e:
             print(f"录制工作线程失败: {str(e)}")
@@ -497,28 +506,22 @@ class ActionRecorder:
     def _check_hotkey_pressed(self, keys):
         """检查快捷键是否被按下"""
         try:
-            # 检查修饰键
-            modifiers = ['alt', 'ctrl', 'shift', 'win']
-            main_keys = [k for k in keys if k not in modifiers]
-            mod_keys = [k for k in keys if k in modifiers]
+            # 使用pynput的全局状态检查
+            from pynput.keyboard import Controller
+            controller = Controller()
             
             # 检查修饰键状态
-            for mod in mod_keys:
-                if mod == 'alt' and not keyboard.is_pressed('alt'):
-                    return False
-                elif mod == 'ctrl' and not keyboard.is_pressed('ctrl'):
-                    return False
-                elif mod == 'shift' and not keyboard.is_pressed('shift'):
-                    return False
-                elif mod == 'win' and not keyboard.is_pressed('win'):
-                    return False
+            if 'alt' in keys and not controller.alt_pressed:
+                return False
+            if 'ctrl' in keys and not controller.ctrl_pressed:
+                return False
+            if 'shift' in keys and not controller.shift_pressed:
+                return False
+            if 'win' in keys and not controller.cmd_pressed:
+                return False
             
-            # 检查主键状态
-            for key in main_keys:
-                if keyboard.is_pressed(key):
-                    return True
-            
-            return False
+            # 检查主键状态 - 简化处理，主要依赖修饰键
+            return True
             
         except Exception as e:
             print(f"检查快捷键失败: {str(e)}")
@@ -532,17 +535,23 @@ class ActionRecorder:
         current_time = time.time()
         time_diff = current_time - self.last_event_time
         
+        # 获取按键名称
+        try:
+            key_name = event.char if hasattr(event, 'char') and event.char else str(event)
+        except:
+            key_name = str(event)
+        
         event_data = {
             'type': 'keyboard',
             'action_code': 1,  # 按下
-            'key_value': event.name,
+            'key_value': key_name,
             'time_diff': time_diff,
             'timestamp': datetime.now()
         }
         
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录键盘按下事件: {event.name}")
+        print(f"记录键盘按下事件: {key_name}")
     
     def _on_key_release(self, event):
         """键盘释放事件处理"""
@@ -552,61 +561,75 @@ class ActionRecorder:
         current_time = time.time()
         time_diff = current_time - self.last_event_time
         
+        # 获取按键名称
+        try:
+            key_name = event.char if hasattr(event, 'char') and event.char else str(event)
+        except:
+            key_name = str(event)
+        
         event_data = {
             'type': 'keyboard',
             'action_code': 2,  # 释放
-            'key_value': event.name,
+            'key_value': key_name,
             'time_diff': time_diff,
             'timestamp': datetime.now()
         }
         
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录键盘释放事件: {event.name}")
+        print(f"记录键盘释放事件: {key_name}")
     
-    def _mouse_event_handler(self, event):
-        from mouse._mouse_event import ButtonEvent
+    def _mouse_event_handler(self, x, y, button, pressed):
+        """鼠标事件处理
+        
+        Args:
+            x: 鼠标X坐标
+            y: 鼠标Y坐标
+            button: 鼠标按钮
+            pressed: 是否按下
+        """
         if not self.recording:
             return
-        if isinstance(event, ButtonEvent):
-            if  self.record_mode == '全部':
-                if event.event_type == 'down':
-                    self._on_mouse_press(event)
-                    self._on_mouse_click(event)  # 只要down就算click
-                elif event.event_type == 'up':
-                    self._on_mouse_release(event)
-            elif self.record_mode == '单击':
-                if event.event_type == 'down':
-                    self._on_mouse_click(event)
-            elif self.record_mode == '按下弹起':
-                if event.event_type == 'up':
-                    self._on_mouse_press(event)
-                elif event.event_type == 'down':
-                    self._on_mouse_release(event)
+            
+        if self.record_mode == '全部':
+            if pressed:
+                self._on_mouse_press(x, y, button)
+                self._on_mouse_click(x, y, button)  # 只要down就算click
             else:
-                print(f"未知的鼠标模式{self.mode_var}")
+                self._on_mouse_release(x, y, button)
+        elif self.record_mode == '单击':
+            if pressed:
+                self._on_mouse_click(x, y, button)
+        elif self.record_mode == '按下弹起':
+            if pressed:
+                self._on_mouse_press(x, y, button)
+            else:
+                self._on_mouse_release(x, y, button)
+        else:
+            print(f"未知的鼠标模式{self.record_mode}")
     
-    def _on_mouse_click(self, event):
+    def _on_mouse_click(self, x, y, button):
         """鼠标点击事件处理
         Args:
-            event: ButtonEvent
+            x: 鼠标X坐标
+            y: 鼠标Y坐标
+            button: 鼠标按钮
         """
         if not self.recording:
             return
-        # 只在按下时记录单击
-        if event.event_type != 'down':
-            return
-        x, y = mouse.get_position()
+            
         current_time = time.time()
         time_diff = current_time - self.last_event_time
+        
         button_codes = {
-            'left': 1,
-            'right': 2,
-            'middle': 3
+            mouse.Button.left: 1,
+            mouse.Button.right: 2,
+            mouse.Button.middle: 3
         }
+        
         event_data = {
             'type': 'mouse',
-            'action_code': button_codes.get(event.button, 1),
+            'action_code': button_codes.get(button, 1),
             'x': x,
             'y': y,
             'mouse_size': 1,
@@ -615,26 +638,30 @@ class ActionRecorder:
         }
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录鼠标点击事件: {event.button} at ({x}, {y})")
+        print(f"记录鼠标点击事件: {button} at ({x}, {y})")
 
-    def _on_mouse_press(self, event):
+    def _on_mouse_press(self, x, y, button):
         """鼠标按下事件处理
         Args:
-            event: ButtonEvent
+            x: 鼠标X坐标
+            y: 鼠标Y坐标
+            button: 鼠标按钮
         """
         if not self.recording:
             return
+            
         current_time = time.time()
         time_diff = current_time - self.last_event_time
-        x, y = mouse.get_position()
+        
         button_codes = {
-            'left': 4,
-            'right': 6,
-            'middle': 8
+            mouse.Button.left: 4,
+            mouse.Button.right: 6,
+            mouse.Button.middle: 8
         }
+        
         event_data = {
             'type': 'mouse',
-            'action_code': button_codes.get(event.button, 4),
+            'action_code': button_codes.get(button, 4),
             'x': x,
             'y': y,
             'mouse_size': 1,
@@ -643,26 +670,30 @@ class ActionRecorder:
         }
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录鼠标按下事件: {event.button} at ({x}, {y})")
+        print(f"记录鼠标按下事件: {button} at ({x}, {y})")
 
-    def _on_mouse_release(self, event):
+    def _on_mouse_release(self, x, y, button):
         """鼠标释放事件处理
         Args:
-            event: ButtonEvent
+            x: 鼠标X坐标
+            y: 鼠标Y坐标
+            button: 鼠标按钮
         """
         if not self.recording:
             return
+            
         current_time = time.time()
         time_diff = current_time - self.last_event_time
-        x, y = mouse.get_position()
+        
         button_codes = {
-            'left': 5,
-            'right': 7,
-            'middle': 9
+            mouse.Button.left: 5,
+            mouse.Button.right: 7,
+            mouse.Button.middle: 9
         }
+        
         event_data = {
             'type': 'mouse',
-            'action_code': button_codes.get(event.button, 5),
+            'action_code': button_codes.get(button, 5),
             'x': x,
             'y': y,
             'mouse_size': 1,
@@ -671,20 +702,22 @@ class ActionRecorder:
         }
         self.recorded_events.append(event_data)
         self.last_event_time = current_time
-        print(f"记录鼠标释放事件: {event.button} at ({x}, {y})")
+        print(f"记录鼠标释放事件: {button} at ({x}, {y})")
     
     def stop_recording(self):
         """停止录制"""
         try:
             print("停止录制...")
             self.recording = False
-            keyboard.unhook_all()
-            if hasattr(self, '_mouse_hook'):
-                try:
-                    mouse.unhook(self._mouse_hook)
-                except ValueError:
-                    pass
-            mouse.unhook_all()
+            
+            # 停止pynput监听器
+            if hasattr(self, '_keyboard_listener') and self._keyboard_listener:
+                self._keyboard_listener.stop()
+                self._keyboard_listener = None
+                
+            if hasattr(self, '_mouse_listener') and self._mouse_listener:
+                self._mouse_listener.stop()
+                self._mouse_listener = None
             
             # 保存录制的事件到数据库
             if self.recorded_events:
@@ -744,6 +777,7 @@ class ActionRecorder:
                     continue
                 # 创建动作列表记录
                 action_list = ActionList(
+                    list_rank_id=self.home_tab.current_action_list_selected_rank,
                     group_id=self.home_tab.action_group_id,
                     action_type=event['type'],
                     action_name=f"录制事件_{len(self.recorded_events) - self.recorded_events.index(event)}",
