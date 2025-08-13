@@ -1,91 +1,94 @@
-import socket
-import json
-from typing import Optional, Dict, Any, Union
-from pathlib import Path
+import os
+import sys
+import webbrowser
+import time
+from NetworkUtils.app import app
 
 class NetworkUtils:
     """网络通信工具类"""
-    
     @staticmethod
-    def get_local_ip() -> str:
-        """获取本地IP地址
+    def start_network_utils():
+        """主函数"""
+        # 检查是否是主进程启动（不是Flask的reloader进程）
+        if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+            print("=" * 50)
+            print("HISAuto_web - 住院部HIS Agent应用")
+            print("=" * 50)
+            print("正在启动应用...")
         
-        Returns:
-            str: 本地IP地址
-        """
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except Exception:
-            return "127.0.0.1"
-    
-    @staticmethod
-    def is_port_available(port: int) -> bool:
-        """检查端口是否可用
+        # 检查端口是否被占用
+        import socket
+        import subprocess
+        import time
         
-        Args:
-            port: 端口号
+        def check_port(port):
+            """检查端口是否被占用"""
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('localhost', port))
+            sock.close()
+            return result == 0
+        
+        def kill_process_on_port(port):
+            """终止占用指定端口的进程"""
+            try:
+                # 查找占用端口的进程
+                result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
+                lines = result.stdout.split('\n')
+                
+                for line in lines:
+                    if f':{port}' in line and 'LISTENING' in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            try:
+                                # 终止进程
+                                subprocess.run(['taskkill', '/PID', pid, '/F'], 
+                                            capture_output=True, check=True)
+                                print(f"已终止占用端口{port}的进程 (PID: {pid})")
+                                time.sleep(1)  # 等待进程完全终止
+                                return True
+                            except subprocess.CalledProcessError:
+                                continue
+                return False
+            except Exception as e:
+                print(f"终止进程时出错: {e}")
+                return False
+        
+        # 检查端口占用情况（只在主进程启动时检查）
+        if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+            if check_port(5001):
+                print("检测到端口5001被占用，正在尝试释放...")
+                if kill_process_on_port(5001):
+                    print("端口已释放，继续启动...")
+                else:
+                    print("无法自动释放端口，请手动关闭占用端口的应用后重试")
+                    print("或者等待几秒钟后重新运行此脚本")
+                    return
             
-        Returns:
-            bool: 端口是否可用
-        """
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.bind(("", port))
-            s.close()
-            return True
-        except socket.error:
-            return False
-    
-    @staticmethod
-    def find_available_port(start_port: int = 8000, max_port: int = 9000) -> Optional[int]:
-        """查找可用端口
+            # 再次检查端口
+            if check_port(5001):
+                print("错误: 端口5001仍被占用，请关闭其他应用后重试")
+                return
         
-        Args:
-            start_port: 起始端口
-            max_port: 最大端口
-            
-        Returns:
-            Optional[int]: 可用端口号，如果找不到则返回None
-        """
-        for port in range(start_port, max_port + 1):
-            if NetworkUtils.is_port_available(port):
-                return port
-        return None
-    
-    @staticmethod
-    def save_network_config(config: Dict[str, Any], config_path: Union[str, Path]) -> bool:
-        """保存网络配置
-        
-        Args:
-            config: 配置字典
-            config_path: 配置文件路径
-            
-        Returns:
-            bool: 是否成功
-        """
+        # 启动应用
         try:
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=4)
-            return True
-        except Exception:
-            return False
-    
-    @staticmethod
-    def load_network_config(config_path: Union[str, Path]) -> Optional[Dict[str, Any]]:
-        """加载网络配置
-        
-        Args:
-            config_path: 配置文件路径
+            # 只在主进程启动时显示成功信息和打开浏览器
+            if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+                print("应用启动成功!")
+                print("访问地址: http://localhost:5001")
+                print("登录信息:")
+                print("  用户名: admin")
+                print("  密码: admin")
+                print()
+                print("按 Ctrl+C 停止应用")
+                print("-" * 50)
+                
+            # 启动Flask应用
+            app.run(debug=False, host='0.0.0.0', port=5001)
             
-        Returns:
-            Optional[Dict[str, Any]]: 配置字典，如果加载失败则返回None
-        """
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return None 
+        except KeyboardInterrupt:
+            print("\n正在停止应用...")
+            print("应用已停止")
+        except Exception as e:
+            print(f"启动失败: {e}")
+            print("请检查端口是否被占用或尝试重新启动")

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HISAuto_web - 住院部HIS Agent应用</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fonts/fonts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-background">
+            <div class="background-pattern"></div>
+        </div>
+        
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="{{ url_for('static', filename='icons/logo.svg') }}" alt="HIS Logo" width="48" height="48">
+                    </div>
+                    <h1>HISAuto_web</h1>
+                    <p>住院部HIS Agent应用</p>
+                </div>
+            </div>
+            
+            <div class="login-form">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">用户名</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon">
+                                <use xlink:href="{{ url_for('static', filename='icons/iconfont.svg') }}#icon-user"></use>
+                            </svg>
+                            <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">密码</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon">
+                                <use xlink:href="{{ url_for('static', filename='icons/iconfont.svg') }}#icon-settings"></use>
+                            </svg>
+                            <input type="password" id="password" name="password" placeholder="请输入密码" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="submit" class="login-btn">
+                            <span class="btn-text">登录</span>
+                            <div class="btn-loading" style="display: none;">
+                                <div class="spinner"></div>
+                            </div>
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="login-footer">
+                    <p>© 2024 HISAuto_web 医疗信息系统</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="notification" id="notification" style="display: none;">
+            <div class="notification-content">
+                <span class="notification-message" id="notificationMessage"></span>
+                <button class="notification-close" onclick="hideNotification()">×</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+</body>
+</html> 

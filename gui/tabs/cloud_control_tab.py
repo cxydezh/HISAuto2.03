@@ -163,6 +163,8 @@ class CloudControlTab(BaseTab):
         
     def _start_all_services(self):
         """启动所有服务"""
+        import utils.network_utils as NetworkUtils
+        NetworkUtils.NetworkUtils.start_network_utils()
         self.show_message("提示", "正在启动所有服务...")
         # TODO: 实际的服务启动逻辑
         

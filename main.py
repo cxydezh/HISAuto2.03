@@ -30,6 +30,7 @@ def initialize_system():
             os.path.join(sys_folder, 'LongTxt'),
             os.path.join(sys_folder, 'outputTxt'),
             os.path.join(sys_folder, 'function'),
+            os.path.join(sys_folder, 'NetworkUtils'),
             os.path.join(sys_folder, 'logs')
         ]
         

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- 背景圆形 -->
+  <circle cx="100" cy="100" r="90" fill="url(#logoGradient)" filter="url(#shadow)"/>
+  
+  <!-- 医疗十字 -->
+  <rect x="85" y="60" width="30" height="80" fill="white" rx="3"/>
+  <rect x="60" y="85" width="80" height="30" fill="white" rx="3"/>
+  
+  <!-- AI元素 - 电路板图案 -->
+  <g fill="none" stroke="white" stroke-width="2" opacity="0.8">
+    <!-- 左上角电路 -->
+    <path d="M 40 40 L 60 40 L 60 60 L 80 60"/>
+    <circle cx="40" cy="40" r="3" fill="white"/>
+    <circle cx="80" cy="60" r="3" fill="white"/>
+    
+    <!-- 右上角电路 -->
+    <path d="M 160 40 L 140 40 L 140 60 L 120 60"/>
+    <circle cx="160" cy="40" r="3" fill="white"/>
+    <circle cx="120" cy="60" r="3" fill="white"/>
+    
+    <!-- 左下角电路 -->
+    <path d="M 40 160 L 60 160 L 60 140 L 80 140"/>
+    <circle cx="40" cy="160" r="3" fill="white"/>
+    <circle cx="80" cy="140" r="3" fill="white"/>
+    
+    <!-- 右下角电路 -->
+    <path d="M 160 160 L 140 160 L 140 140 L 120 140"/>
+    <circle cx="160" cy="160" r="3" fill="white"/>
+    <circle cx="120" cy="140" r="3" fill="white"/>
+  </g>
+  
+  <!-- 中心点 -->
+  <circle cx="100" cy="100" r="5" fill="white"/>
+  
+  <!-- 文字 "HIS" -->
+  <text x="100" y="180" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">HIS</text>
+</svg> 

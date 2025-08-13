@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HISAuto_web - 住院部HIS Agent应用</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fonts/fonts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <!-- 添加Markdown渲染库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- 顶部导航栏 -->
+        <header class="top-navbar">
+            <div class="navbar-left">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="{{ url_for('static', filename='icons/logo.svg') }}" alt="HIS Logo" width="32" height="32">
+                    </div>
+                    <h1>HISAuto_web</h1>
+                </div>
+            </div>
+            
+            <div class="navbar-right">
+                <div class="user-info">
+                    <span class="username">{{ session.username }}</span>
+                    <a href="/logout" class="logout-btn">退出</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主要内容区域 -->
+        <main class="main-content">
+            <!-- Tab导航 -->
+            <div class="tab-navigation">
+                <button class="tab-btn active" data-tab="workbench">工作台</button>
+                <button class="tab-btn" data-tab="settings">设置</button>
+            </div>
+
+            <!-- Tab内容区域 -->
+            <div class="tab-content">
+                <!-- 工作台Tab -->
+                <div class="tab-panel active" id="workbench">
+                    <div class="workbench-container">
+                        <!-- 左侧面板 -->
+                        <div class="left-panel">
+                            <div class="panel-section">
+                                <button class="update-excel-btn">更新Excel文件</button>
+                            </div>
+                            
+                            <div class="panel-section">
+                                <label for="department-select">科室选择</label>
+                                <select id="department-select" class="department-select">
+                                    <option value="personal">个人</option>
+                                    <option value="nephrology">肾病科</option>
+                                    <option value="respiratory">呼吸内科</option>
+                                    <option value="cardiology">心血管内科</option>
+                                </select>
+                            </div>
+                            
+                            <div class="panel-section">
+                                <label>患者列表</label>
+                                <div class="patient-list-container">
+                                    <table class="patient-list" id="patient-list">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>姓名</th>
+                                                <th>入院日期</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右侧面板 -->
+                        <div class="right-panel">
+                            <div class="panel-tabs">
+                                <button class="panel-tab-btn active" data-panel="info">基本信息</button>
+                                <button class="panel-tab-btn" data-panel="ai-function">AI功能区</button>
+                                <button class="panel-tab-btn" data-panel="ai-result">AI结果区</button>
+                            </div>
+
+                            <div class="panel-content">
+                                <!-- 基本信息面板 -->
+                                <div class="panel-panel active" id="info-panel">
+                                    <div class="patient-info" id="patient-info">
+                                        <div class="info-placeholder">
+                                            <p>请选择患者查看详细信息</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- AI功能区面板 -->
+                                <div class="panel-panel" id="ai-function-panel">
+                                    <div class="ai-function-container">
+                                        <div class="ai-left-section">
+                                            <div class="ai-selection-section">
+                                                <label for="ai-selection">AI功能选择</label>
+                                                <select id="ai-selection" class="ai-selection">
+                                                    <option value="">请选择AI功能</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div class="ai-tree-section">
+                                                <div class="ai-tree" id="ai-tree">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="ai-right-section">
+                                            <div class="ai-controls">
+                                                <div class="mode-selection">
+                                                    <label class="radio-label">
+                                                        <input type="radio" name="ai-mode" value="single" checked>
+                                                        <span>单项</span>
+                                                    </label>
+                                                    <label class="radio-label">
+                                                        <input type="radio" name="ai-mode" value="group">
+                                                        <span>组群</span>
+                                                    </label>
+                                                </div>
+                                                <button class="run-ai-btn" id="run-ai-btn">运行</button>
+                                            </div>
+                                            
+                                            <div class="ai-description">
+                                                <label>AI提示词</label>
+                                                <div class="description-content" id="ai-description-content">
+                                                    <p class="placeholder-text">请选择AI功能查看详细描述</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- AI结果区面板 -->
+                                <div class="panel-panel" id="ai-result-panel">
+                                    <div class="ai-result-container">
+                                        <div class="result-left">
+                                            <div class="result-list" id="result-list">
+                                                <div class="result-placeholder">
+                                                    <p>暂无运行记录</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="result-right">
+                                            <div class="ai-progress" id="ai-progress">
+                                                <div class="progress-placeholder">
+                                                    <p>等待AI功能运行...</p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="ai-result-content" id="ai-result-content">
+                                                <div class="result-placeholder">
+                                                    <p>运行结果将在此显示</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 设置Tab -->
+                <div class="tab-panel" id="settings">
+                    <div class="settings-container">
+                        <h2>系统设置</h2>
+                        <div class="settings-section">
+                            <h3>修改密码</h3>
+                            <form class="password-form" id="password-form">
+                                <div class="form-group">
+                                    <label for="current-password">当前密码</label>
+                                    <input type="password" id="current-password" name="current-password" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="new-password">新密码</label>
+                                    <input type="password" id="new-password" name="new-password" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="confirm-password">确认新密码</label>
+                                    <input type="password" id="confirm-password" name="confirm-password" required>
+                                </div>
+                                <button type="submit" class="save-password-btn">保存密码</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html> 

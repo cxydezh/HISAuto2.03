@@ -1,0 +1,192 @@
+AI-tree Item选中后数据加载逻辑流程图
+=========================================
+
+前置条件：AI功能选择阶段
+    ↓
+用户选择AI功能（ai-selection下拉框）
+    ↓
+触发change事件
+    ↓
+┌─────────────────────────────────────┐
+│ loadAiWorkflow(functionName)        │
+│ ├─ 验证functionName是否为空         │
+│ ├─ 发送API请求到 /api/ai-workflow/ │
+│ └─ 处理响应数据                     │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 后端API处理                         │
+│ ├─ /api/ai-workflow/{function_name} │
+│ ├─ 验证登录状态                     │
+│ ├─ 调用get_ai_workflow()            │
+│ └─ 返回AI功能配置                   │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ renderAiTree(data.workflow)         │
+│ ├─ 清空现有tree容器                 │
+│ ├─ 遍历workflow数组                 │
+│ ├─ 为每个item创建div元素            │
+│ ├─ 绑定click事件（selectAiTreeItem）│
+│ └─ 添加到ai-tree容器                │
+└─────────────────────────────────────┘
+    ↓
+AI-tree渲染完成，等待用户交互
+    ↓
+用户交互触发阶段
+    ↓
+用户点击AI-tree中的某个Item
+    ↓
+触发click事件
+    ↓
+┌─────────────────────────────────────┐
+│ selectAiTreeItem(item) 函数执行     │
+│ ├─ 传入被点击的item对象             │
+│ ├─ item包含：name, description, delay│
+│ └─ 开始处理选中逻辑                 │
+└─────────────────────────────────────┘
+    ↓
+前端处理阶段
+    ↓
+┌─────────────────────────────────────┐
+│ 清除其他Item的选中状态              │
+│ ├─ querySelectorAll('.ai-tree-item')│
+│ ├─ 遍历所有tree-item元素           │
+│ ├─ 移除'selected'类名              │
+│ └─ 重置选中状态                     │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 设置当前Item的选中状态              │
+│ ├─ event.target获取当前点击元素     │
+│ ├─ 添加'selected'类名              │
+│ ├─ 实现视觉选中效果                 │
+│ └─ 更新UI状态                       │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 更新描述内容显示                    │
+│ ├─ 获取ai-description-content元素   │
+│ ├─ 使用模板字符串生成HTML           │
+│ ├─ 显示item.name作为标题            │
+│ ├─ 显示item.description作为描述     │
+│ ├─ 显示item.delay作为执行时间       │
+│ └─ 更新页面显示                     │
+└─────────────────────────────────────┘
+    ↓
+显示结果
+    ↓
+┌─────────────────────────────────────┐
+│ 最终显示效果                        │
+│ ├─ AI-tree中当前Item高亮显示        │
+│ ├─ 描述区域显示详细信息             │
+│ ├─ 包含步骤名称、描述、执行时间     │
+│ └─ 用户可以继续选择其他Item         │
+└─────────────────────────────────────┘
+
+核心函数调用关系
+================
+
+前端调用链：
+用户选择AI功能 → loadAiWorkflow(functionName) → 
+├─ fetch('/api/ai-workflow/{function_name}') → 
+│   ├─ renderAiTree(data.workflow) → 
+│   │   ├─ 创建tree-item元素
+│   │   ├─ 绑定click事件（selectAiTreeItem）
+│   │   └─ 添加到ai-tree容器
+│   └─ renderAiDescription(data.description)
+│
+└─ 用户点击tree-item → selectAiTreeItem(item) → 
+    ├─ 清除其他选中状态
+    ├─ 设置当前选中状态
+    └─ 更新描述内容显示
+
+后端调用链：
+/api/ai-workflow/{function_name} → 
+├─ @login_required 验证登录状态
+├─ get_ai_workflow(function_name) [data_display.py]
+└─ 返回AI功能配置JSON数据
+
+数据获取函数：
+├─ get_ai_workflow(function_name) [data_display.py]
+└─ 从AI_FUNCTIONS字典获取指定功能配置
+
+数据流向
+========
+
+静态数据 (data_display.py):
+├─ AI_FUNCTIONS: AI功能配置字典
+├─ 每个功能包含：description, workflow, func_list_id
+└─ workflow数组包含多个步骤对象
+
+动态数据 (前端处理):
+├─ 用户选择的AI功能名称
+├─ 当前选中的tree-item对象
+└─ 页面显示状态
+
+数据传递路径:
+用户选择AI功能 → API请求 → 后端处理 → 数据返回 → 前端渲染 → 用户点击Item → 显示详细信息
+
+关键数据转换:
+├─ AI功能名称 → 完整功能配置
+├─ workflow数组 → tree-item列表
+└─ tree-item点击 → 详细信息显示
+
+数据更新时机:
+├─ AI功能选择时：重新加载整个workflow
+└─ tree-item点击时：更新选中状态和描述显示
+
+代码实现细节
+============
+
+1. renderAiTree函数:
+   - 清空现有tree容器
+   - 遍历workflow数组
+   - 为每个item创建div元素
+   - 绑定click事件监听器
+   - 传递完整的item对象
+
+2. selectAiTreeItem函数:
+   - 使用querySelectorAll清除选中状态
+   - 使用event.target设置当前选中
+   - 使用innerHTML更新描述内容
+   - 使用模板字符串格式化显示
+
+3. 事件绑定机制:
+   - 在renderAiTree时绑定事件
+   - 使用箭头函数传递item参数
+   - 确保每个item都有独立的事件处理
+
+4. 数据展示格式:
+   - 显示item.name作为标题
+   - 显示item.description作为描述
+   - 显示item.delay作为执行时间
+
+修改建议
+========
+
+1. 前端修改点:
+   - dashboard.js 中的 selectAiTreeItem() 函数
+   - renderAiTree() 函数中的事件绑定逻辑
+   - 描述内容的显示格式和样式
+
+2. 后端修改点:
+   - data_display.py 中的AI_FUNCTIONS数据结构
+   - app.py 中的 /api/ai-workflow 路由
+   - 返回数据的格式和字段
+
+3. 关键依赖关系:
+   - tree-item的选中状态依赖CSS类名
+   - 描述显示依赖item对象的属性
+   - 事件绑定依赖renderAiTree的执行
+
+4. 建议修改顺序:
+   - 先修改数据结构（如果需要）
+   - 再修改后端API返回格式
+   - 最后修改前端显示逻辑
+
+5. 扩展功能建议:
+   - 可以添加更多item属性（如状态、进度等）
+   - 可以实现多选功能
+   - 可以添加动画效果
+   - 可以实现拖拽排序 

@@ -13,9 +13,10 @@ class PatientList(BaseModel):
     patient_id = Column(String(50), nullable=False)  # 病历号
     patient_age = Column(Integer)  # 患者年龄
     patient_ward = Column(String(50), nullable=False)  # 病区
-    attending_doctor_id = Column(Integer, ForeignKey('users.id'))  # 主治医生ID
-    fellow_doctor_id = Column(Integer, ForeignKey('users.id'))  # 住院医生ID
-    resistant_doctor_id = Column(Integer, ForeignKey('users.id'))  # 实习医生ID
+    patient_department_id = Column(String(50), ForeignKey('departments.code'), nullable=False)  # 科室
+    attending_doctor_id = Column(Integer, ForeignKey('users.user_id'))  # 主治医生ID
+    fellow_doctor_id = Column(Integer, ForeignKey('users.user_id'))  # 住院医生ID
+    resistant_doctor_id = Column(Integer, ForeignKey('users.user_id'))  # 实习医生ID
     patient_diagnosis = Column(String(500))  # 患者诊断
     patient_care_rank = Column(String(50))  # 患者护理级别
     patient_fee = Column(String(50))  # 患者费用
@@ -27,6 +28,7 @@ class PatientList(BaseModel):
     attending_doctor = relationship("User", foreign_keys=[attending_doctor_id])
     fellow_doctor = relationship("User", foreign_keys=[fellow_doctor_id])
     resistant_doctor = relationship("User", foreign_keys=[resistant_doctor_id])
+    patient_department = relationship("Department", foreign_keys=[patient_department_id])   
 
     def discharge(self, discharge_time):
         """将患者标记为出院"""

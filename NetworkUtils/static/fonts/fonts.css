@@ -1,0 +1,79 @@
+/* 字体定义文件 */
+
+/* Microsoft Yahei 字体 */
+@font-face {
+  font-family: 'Microsoft Yahei';
+  src: local('Microsoft Yahei'),
+       local('微软雅黑'),
+       url('msyh.ttf') format('truetype'),
+       url('msyh.woff2') format('woff2'),
+       url('msyh.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Microsoft Yahei';
+  src: local('Microsoft Yahei Bold'),
+       local('微软雅黑 Bold'),
+       url('msyhbd.ttf') format('truetype'),
+       url('msyhbd.woff2') format('woff2'),
+       url('msyhbd.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Source Han Sans 字体 */
+@font-face {
+  font-family: 'Source Han Sans';
+  src: local('Source Han Sans'),
+       local('思源黑体'),
+       url('SourceHanSans-Regular.ttf') format('truetype'),
+       url('SourceHanSans-Regular.woff2') format('woff2'),
+       url('SourceHanSans-Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Source Han Sans';
+  src: local('Source Han Sans Bold'),
+       local('思源黑体 Bold'),
+       url('SourceHanSans-Bold.ttf') format('truetype'),
+       url('SourceHanSans-Bold.woff2') format('woff2'),
+       url('SourceHanSans-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Source Han Sans';
+  src: local('Source Han Sans Light'),
+       local('思源黑体 Light'),
+       url('SourceHanSans-Light.ttf') format('truetype'),
+       url('SourceHanSans-Light.woff2') format('woff2'),
+       url('SourceHanSans-Light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 字体回退方案 */
+body {
+  font-family: 'Microsoft Yahei', 'Source Han Sans', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* 标题字体 */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Source Han Sans', 'Microsoft Yahei', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: bold;
+}
+
+/* 代码字体 */
+code, pre {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+} 

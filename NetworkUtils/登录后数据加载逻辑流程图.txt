@@ -1,0 +1,192 @@
+HISAuto_web登录后数据加载逻辑流程图
+=========================================
+
+用户登录阶段
+    ↓
+用户输入用户名密码 → 点击登录按钮
+    ↓
+前端JavaScript处理登录表单
+    ↓
+┌─────────────────────────────────────┐
+│ 发送POST请求到 /login               │
+│ ├─ 用户名: admin                   │
+│ ├─ 密码: admin                     │
+│ └─ Content-Type: application/x-www-│
+│    form-urlencoded                 │
+└─────────────────────────────────────┘
+    ↓
+后端验证登录信息
+    ↓
+┌─────────────────────────────────────┐
+│ 登录成功处理                        │
+│ ├─ 设置session['logged_in'] = True │
+│ ├─ 设置session['username'] = admin │
+│ └─ 返回重定向URL: /dashboard       │
+└─────────────────────────────────────┘
+    ↓
+前端接收成功响应
+    ↓
+┌─────────────────────────────────────┐
+│ 页面跳转处理                        │
+│ ├─ 显示"登录成功，正在跳转..."      │
+│ ├─ 延迟1秒                         │
+│ └─ window.location.href = /dashboard│
+└─────────────────────────────────────┘
+    ↓
+页面跳转和初始化
+    ↓
+浏览器请求 /dashboard 路由
+    ↓
+┌─────────────────────────────────────┐
+│ 后端路由处理                        │
+│ ├─ @login_required 验证登录状态     │
+│ ├─ 渲染dashboard.html模板          │
+│ └─ 返回HTML页面                    │
+└─────────────────────────────────────┘
+    ↓
+浏览器加载dashboard.html
+    ↓
+┌─────────────────────────────────────┐
+│ 页面资源加载                        │
+│ ├─ 加载CSS文件                     │
+│ ├─ 加载JavaScript文件              │
+│ └─ 执行dashboard.js                │
+└─────────────────────────────────────┘
+    ↓
+前端JavaScript初始化
+    ↓
+┌─────────────────────────────────────┐
+│ DOMContentLoaded事件处理            │
+│ ├─ 绑定Tab切换事件                  │
+│ ├─ 绑定面板切换事件                 │
+│ ├─ 绑定科室选择事件                 │
+│ ├─ 绑定AI功能选择事件               │
+│ ├─ 绑定运行AI按钮事件               │
+│ ├─ 调用loadPatientsByDepartment()  │
+│ └─ 调用loadAiFunctions()           │
+└─────────────────────────────────────┘
+    ↓
+初始数据加载
+    ↓
+┌─────────────────┬─────────────────┐
+│ 患者数据加载     │ AI功能数据加载   │
+│                 │                 │
+│ loadPatientsBy- │ loadAiFunctions()│
+│ Department()    │                 │
+│                 │                 │
+│ ├─ 默认科室:    │ ├─ 发送请求到    │
+│    'personal'   │    /api/ai-     │
+│ ├─ 发送请求到   │    functions    │
+│    /api/patients│ ├─ 获取AI功能   │
+│    /personal    │    列表         │
+│ ├─ 获取患者列表 │ ├─ 渲染AI功能   │
+│ ├─ 渲染患者列表 │    选择框       │
+│ └─ 绑定点击事件 │ └─ 绑定选择事件 │
+└─────────────────┴─────────────────┘
+    ↓                    ↓
+患者列表显示              AI功能列表显示
+    ↓                    ↓
+用户交互触发数据加载
+    ↓
+┌─────────────────┬─────────────────┬─────────────────┐
+│ 科室选择变化     │ 患者选择        │ AI功能选择       │
+│                 │                 │                 │
+│ 触发change事件   │ 触发click事件   │ 触发change事件   │
+│                 │                 │                 │
+│ ├─ 重新加载患者  │ ├─ 加载患者详情 │ ├─ 加载工作流程  │
+│    列表         │ ├─ 加载AI历史   │ ├─ 显示功能描述  │
+│ ├─ 清空患者详情  │ ├─ 显示患者信息 │ └─ 显示工作步骤  │
+│ └─ 清空AI历史    │ └─ 显示AI历史   │                 │
+└─────────────────┴─────────────────┴─────────────────┘
+    ↓                    ↓                    ↓
+loadPatientsBy-    selectPatient()    loadAiWorkflow()
+Department()       ├─ loadPatientInfo()├─ fetch('/api/ai-
+├─ fetch('/api/    ├─ loadPatientAi-  workflow/{name}')
+patients/{dept}')  Results()          ├─ renderAiTree()
+├─ renderPatient-  ├─ fetch('/api/    └─ renderAi-
+List()             patient/{id}')     Description()
+└─ 更新患者列表    ├─ fetch('/api/
+                   patient-ai-results/
+                   {id}')
+                   ├─ renderPatientInfo()
+                   └─ renderPatientAiResults()
+
+核心函数调用关系
+================
+
+前端调用链：
+用户登录成功 → 跳转到dashboard → DOMContentLoaded → 
+├─ 初始化事件监听器
+├─ loadPatientsByDepartment('personal') → 
+│   ├─ fetch('/api/patients/{department}') → renderPatientList()
+│   └─ 用户选择患者 → selectPatient() → 
+│       ├─ loadPatientInfo() → fetch('/api/patient/{patient_id}') → renderPatientInfo()
+│       └─ loadPatientAiResults() → fetch('/api/patient-ai-results/{patient_id}') → renderPatientAiResults()
+│
+├─ loadAiFunctions() → 
+│   ├─ fetch('/api/ai-functions') → renderAiFunctions()
+│   └─ 用户选择AI功能 → loadAiWorkflow() → fetch('/api/ai-workflow/{function_name}') → 
+│       ├─ renderAiTree()
+│       └─ renderAiDescription()
+│
+└─ 科室选择变化 → loadPatientsByDepartment(department)
+
+后端调用链：
+/api/patients/{department} → get_patients_by_department() [data_display.py]
+/api/patient/{patient_id} → get_patient_info() [data_display.py]
+/api/patient-ai-results/{patient_id} → db.get_patient_ai_results() [database.py]
+/api/ai-functions → get_ai_functions() [data_display.py]
+/api/ai-workflow/{function_name} → get_ai_workflow() [data_display.py]
+
+数据流向
+========
+
+静态数据 (data_display.py):
+├─ DEPARTMENTS: 科室列表
+├─ PATIENTS_DATA: 患者数据（按科室分组）
+└─ AI_FUNCTIONS: AI功能配置和工作流程
+
+动态数据 (数据库):
+├─ ai_run_results: AI运行结果表
+└─ patients: 患者信息表
+
+数据传递路径:
+用户登录 → 页面初始化 → API请求 → 后端处理 → 数据返回 → 前端渲染
+
+关键数据转换:
+├─ 科室选择 → 患者列表过滤
+├─ 患者选择 → 患者详细信息 + AI运行历史
+└─ AI功能选择 → 工作流程配置 + 功能描述
+
+数据加载时机:
+├─ 页面加载时：科室患者列表 + AI功能列表
+└─ 用户交互时：患者详情 + AI历史 + 工作流程
+
+修改建议
+========
+
+1. 前端修改点:
+   - dashboard.js 中的初始化逻辑
+   - 数据加载函数的调用顺序
+   - 用户交互事件的处理逻辑
+   - 数据渲染和显示逻辑
+
+2. 后端修改点:
+   - app.py 中的API路由
+   - data_display.py 中的数据结构
+   - database.py 中的查询逻辑
+
+3. 关键依赖关系:
+   - 页面初始化依赖API数据加载
+   - 用户交互依赖已加载的基础数据
+   - 数据渲染依赖API返回的数据格式
+
+4. 建议修改顺序:
+   - 先修改数据结构和API接口
+   - 再修改后端处理逻辑
+   - 最后修改前端加载和显示逻辑
+
+5. 性能优化建议:
+   - 考虑数据预加载策略
+   - 实现数据缓存机制
+   - 优化API请求频率 
