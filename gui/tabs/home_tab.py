@@ -1562,6 +1562,9 @@ class HomeTab(BaseTab):
     def _record_action(self):
         """录制行为"""
         try:
+            if self.current_action_list_hierarchy_id == None:
+                messagebox.showerror("错误", "请先选择要录制行为的行为列表")
+                return
             # 调用修复后的录制模块中的录制功能
             from utils.action_recorder_fixed import record_action
             if record_action(self):
