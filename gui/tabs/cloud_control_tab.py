@@ -164,22 +164,28 @@ class CloudControlTab(BaseTab):
     def _start_all_services(self):
         """启动所有服务"""
         import utils.network_utils as NetworkUtils
-        NetworkUtils.NetworkUtils.start_network_utils()
-        self.show_message("提示", "正在启动所有服务...")
-        # TODO: 实际的服务启动逻辑
+        NetworkUtils.network_utils_instance.start_network_utils()        # TODO: 实际的服务启动逻辑
         
     def _stop_all_services(self):
         """停止所有服务"""
         if self.show_question("确认", "确定要停止所有服务吗？"):
-            self.show_message("提示", "正在停止所有服务...")
-            # TODO: 实际的服务停止逻辑
+            import utils.network_utils as NetworkUtils
+            NetworkUtils.network_utils_instance.stop_network_utils()
         
     def _restart_services(self):
         """重启服务"""
         if self.show_question("确认", "确定要重启服务吗？"):
             self.show_message("提示", "正在重启服务...")
             # TODO: 实际的服务重启逻辑
-        
+    
+    def _start_network_service(self):
+        """启动网络服务"""
+        try:
+            import utils.network_utils as NetworkUtils
+            NetworkUtils.network_utils_instance.start_network_utils()
+            self.show_message("提示", "网络服务启动中...")
+        except Exception as e:
+            self.show_message("错误", f"启动网络服务失败: {e}", "error")
     def _system_backup(self):
         """系统备份"""
         self.show_message("提示", "系统备份功能开发中...")

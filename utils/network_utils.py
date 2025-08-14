@@ -2,93 +2,142 @@ import os
 import sys
 import webbrowser
 import time
+import threading
 from NetworkUtils.app import app
 
 class NetworkUtils:
     """网络通信工具类"""
-    @staticmethod
-    def start_network_utils():
-        """主函数"""
-        # 检查是否是主进程启动（不是Flask的reloader进程）
-        if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-            print("=" * 50)
-            print("HISAuto_web - 住院部HIS Agent应用")
-            print("=" * 50)
-            print("正在启动应用...")
+    
+    def __init__(self):
+        self.flask_thread = None
+        self.flask_app = None
+        self.is_running = False
+        self._stop_event = threading.Event()
+    
+    def start_network_utils(self):
+        """启动网络服务（非阻塞）"""
+        if self.is_running:
+            print("服务已在运行中...")
+            return
         
-        # 检查端口是否被占用
-        import socket
-        import subprocess
-        import time
+        # 确保之前的服务完全停止
+        self._ensure_service_stopped()
         
-        def check_port(port):
-            """检查端口是否被占用"""
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            result = sock.connect_ex(('localhost', port))
-            sock.close()
-            return result == 0
+        # 等待端口完全释放
+        max_wait = 5
+        wait_count = 0
+        while self._check_port(5001) and wait_count < max_wait:
+            print(f"等待端口5001释放... ({wait_count + 1}/{max_wait})")
+            time.sleep(1)
+            wait_count += 1
         
-        def kill_process_on_port(port):
-            """终止占用指定端口的进程"""
-            try:
-                # 查找占用端口的进程
-                result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
-                lines = result.stdout.split('\n')
-                
-                for line in lines:
-                    if f':{port}' in line and 'LISTENING' in line:
-                        parts = line.split()
-                        if len(parts) >= 5:
-                            pid = parts[-1]
-                            try:
-                                # 终止进程
-                                subprocess.run(['taskkill', '/PID', pid, '/F'], 
-                                            capture_output=True, check=True)
-                                print(f"已终止占用端口{port}的进程 (PID: {pid})")
-                                time.sleep(1)  # 等待进程完全终止
-                                return True
-                            except subprocess.CalledProcessError:
-                                continue
-                return False
-            except Exception as e:
-                print(f"终止进程时出错: {e}")
-                return False
+        # 重置状态
+        self.is_running = False
+        self.flask_thread = None
+        self.flask_app = None
+        self._stop_event.clear()
         
-        # 检查端口占用情况（只在主进程启动时检查）
-        if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-            if check_port(5001):
-                print("检测到端口5001被占用，正在尝试释放...")
-                if kill_process_on_port(5001):
-                    print("端口已释放，继续启动...")
-                else:
-                    print("无法自动释放端口，请手动关闭占用端口的应用后重试")
-                    print("或者等待几秒钟后重新运行此脚本")
-                    return
+        # 在新线程中启动Flask应用
+        self.flask_thread = threading.Thread(target=self._run_flask_app, daemon=True)
+        self.flask_thread.start()
+        
+        # 等待服务启动
+        time.sleep(2)
+        if self.is_running:
+            print("应用启动成功!")
+            print("访问地址: http://localhost:5001")
+            # 自动打开浏览器
+            webbrowser.open('http://localhost:5001')
+        else:
+            print("应用启动失败，请检查日志")
+    
+    def stop_network_utils(self):
+        """停止网络服务"""
+        if not self.is_running:
+            print("服务未在运行...")
+            return
             
-            # 再次检查端口
-            if check_port(5001):
-                print("错误: 端口5001仍被占用，请关闭其他应用后重试")
-                return
-        
-        # 启动应用
         try:
-            # 只在主进程启动时显示成功信息和打开浏览器
-            if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-                print("应用启动成功!")
-                print("访问地址: http://localhost:5001")
-                print("登录信息:")
-                print("  用户名: admin")
-                print("  密码: admin")
-                print()
-                print("按 Ctrl+C 停止应用")
-                print("-" * 50)
-                
-            # 启动Flask应用
-            app.run(debug=False, host='0.0.0.0', port=5001)
+            print("正在停止网络服务...")
             
-        except KeyboardInterrupt:
-            print("\n正在停止应用...")
-            print("应用已停止")
+            # 设置停止标志
+            self._stop_event.set()
+            self.is_running = False
+            
+            # 等待线程自然结束
+            if self.flask_thread and self.flask_thread.is_alive():
+                print("等待网络服务自然停止...")
+                # 给线程一些时间来自然结束
+                self.flask_thread.join(timeout=3)
+                
+                # 如果线程还在运行，等待更长时间
+                if self.flask_thread.is_alive():
+                    print("等待服务完全停止...")
+                    self.flask_thread.join(timeout=2)
+            
+            # 清理资源
+            self.flask_thread = None
+            self.flask_app = None
+            
+            print("网络服务已停止")
+                
         except Exception as e:
-            print(f"启动失败: {e}")
-            print("请检查端口是否被占用或尝试重新启动")
+            print(f"停止服务时出错: {e}")
+            # 即使出错也要清理资源
+            self.is_running = False
+            self.flask_thread = None
+            self.flask_app = None
+    
+    def _ensure_service_stopped(self):
+        """确保服务完全停止"""
+        if self.is_running:
+            print("检测到服务仍在运行，正在停止...")
+            self.stop_network_utils()
+            time.sleep(1)  # 等待完全停止
+    
+    def _run_flask_app(self):
+        """在独立线程中运行Flask应用"""
+        try:
+            self.is_running = True
+            
+            # 创建新的Flask应用实例
+            from NetworkUtils.app import app
+            self.flask_app = app
+            
+            print("Flask应用正在启动...")
+            
+            # 使用更温和的启动方式
+            app.run(debug=False, host='0.0.0.0', port=5001, use_reloader=False, threaded=True)
+            
+        except Exception as e:
+            print(f"Flask应用运行出错: {e}")
+            self.is_running = False
+        finally:
+            # 确保状态正确
+            if not self.is_running:
+                print("Flask应用已停止")
+    
+    def _check_port(self, port):
+        """检查端口是否被占用"""
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(('localhost', port))
+        sock.close()
+        return result == 0
+    
+    def is_service_running(self):
+        """检查服务是否正在运行"""
+        return self.is_running
+    
+    def get_service_status(self):
+        """获取详细的服务状态信息"""
+        status = {
+            'is_running': self.is_running,
+            'thread_alive': self.flask_thread.is_alive() if self.flask_thread else False,
+            'port_occupied': self._check_port(5001),
+            'thread_info': str(self.flask_thread) if self.flask_thread else 'None'
+        }
+        return status
+
+# 创建全局实例
+network_utils_instance = NetworkUtils()

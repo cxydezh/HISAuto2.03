@@ -5,9 +5,8 @@ import random
 # 科室数据
 DEPARTMENTS = [
     {"id": "personal", "name": "个人"},
-    {"id": "nephrology", "name": "肾病科"},
-    {"id": "respiratory", "name": "呼吸内科"},
-    {"id": "cardiology", "name": "心血管内科"}
+    {"id": "department", "name": "科室"},
+    {"id": "hospital", "name": "全院"}
 ]
 
 # 患者数据
