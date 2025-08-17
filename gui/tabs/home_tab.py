@@ -704,16 +704,15 @@ class HomeTab(BaseTab):
         self.department_id_entry.config(state='disabled')
         
         try:
-            if iid.startswith("group_"):
+            # 如果treeview中的value的值中group_type的值为group，则表示选中的是组
+            if self.action_list.item(iid, "values")[1] == "action_group":
                 # 选中的是ActionGroup
-                group_id = int(iid.split("_")[1])
-                self.action_group_id = group_id
+                self.action_group_id = iid
                 
                 # 使用ActionGroupManager获取数据
-                data = self.action_group_manager.get_action_group_data("ActionGroup",group_id)
+                data = self.action_group_manager.get_action_group_data("ActionGroup",self.action_group_id )
                 if data:
                     group = data['group']
-                    list_hierarchy = data['list_hierarchy']
                     user = data['user']
                     actions = data['actions']
                     hierarchy = data['hierarchy']
@@ -721,7 +720,7 @@ class HomeTab(BaseTab):
                     self.action_group_hierarchy_id = group.group_rank_id
                     
                     # 填充详情区
-                    self.group_name_var.set(group.action_list_group_name or "")
+                    self.group_name_var.set(self.action_list.item(iid, "values")[0] or "")
                     self.group_last_circle_local_var.set(group.last_circle_local or "")
                     self.group_last_circle_node_var.set(group.last_circle_node or "")
                     self.group_setup_time_var.set(str(group.created_at or ""))
@@ -736,36 +735,8 @@ class HomeTab(BaseTab):
                     # 填充action_list_tree
                     self.action_list.delete(*self.action_list.get_children())
                     # 先把list_hierarchy填充到action_list_tree
-                    for one_list_hierarchy in list_hierarchy:
-                        temp_list_hierarchy_rank = one_list_hierarchy.list_rank
-                        if "B0" in temp_list_hierarchy_rank:
-                            self.action_list.insert("", "end", iid=str("hierarchy_"+str(one_list_hierarchy.id)), values=(
-                                one_list_hierarchy.list_name, "list_hierarchy", one_list_hierarchy.group_note
-                            ))
-                        else:
-                            # 获取list_hierarchy的父节点
-                            pro_rank_iid = ''
-                            pro_key = None
-                            temp_list_hierarchy_rank = parse_group_rank(temp_list_hierarchy_rank)
-                            for key, value in temp_list_hierarchy_rank.items():
-                                if value == 0 and key != "A":
-                                    break
-                                else:
-                                    if pro_key != None:
-                                        pro_rank_iid =concat( pro_rank_iid + pro_key,str(temp_list_hierarchy_rank[pro_key]))
-                                    pro_key = key
-                            pro_rank = iid_to_group_rank(pro_rank_iid)
-                            pro_rank_action_list_hierarchy = self.action_group_manager.get_list_hierarchy_data(pro_rank,group_id)
-                            if pro_rank_action_list_hierarchy:
-                                self.action_list.insert(str("hierarchy_"+str(pro_rank_action_list_hierarchy.id)), "end", iid=str("hierarchy_"+str(one_list_hierarchy.id)), text="📁", values=(
-                                    one_list_hierarchy.list_name, "list_hierarchy", one_list_hierarchy.group_note
-                                ))
-                    # 再把actions填充到action_list_tree
-                    
-                    for action in actions:
-                        self.action_list.insert(str("hierarchy_"+str(action.list_rank_id)), "end", iid=str("action_"+str(action.id)), text="📄",  values=(
-                            action.action_name, action.action_type,action.action_note
-                        ))
+                    # 调用hometab_funcData._load_action_group_data方法，填充action_list_tree
+                    hometab_funcData._load_action_group_data('Action',self.action_list)
                     
                     self.hierarchy_sort = group.sort_num if group else None
                     selected_group_rank = hierarchy.group_rank if hierarchy else None
@@ -851,7 +822,7 @@ class HomeTab(BaseTab):
             return
         from utils.actionGroupHierarchyManager import ActionGroupHierarchy_Manager
         #调用ActionGroupHierarchy_Manager方法，新建行为组组套
-        ActionGroupHierarchy_Manager(self.my_window, "ActionsGroupHierarchy", self.action_group_selected_rank, self.relate_location_selected, self.hierarchy_sort)
+        ActionGroupHierarchy_Manager(self.my_window, "ActionsGroupHierarchy", self.action_group_selected_rank, self.relate_location_selected, self.hierarchy_sort,is_action_list=True)
 
         #刷新行为组树
         self._refresh_action_group()
@@ -1522,7 +1493,7 @@ class HomeTab(BaseTab):
                 return
         from utils.actionGroupHierarchyManager import ActionGroupHierarchy_Manager
         #调用ActionGroupHierarchy_Manager方法，新建行为组组套
-        ActionGroupHierarchy_Manager(self.my_window, "ListGroupHierarchy",
+        ActionGroupHierarchy_Manager(self.my_window, "ActionList",
                                       self.current_action_list_selected_rank, self.relate_location_selected_action_list,
                                       self.hierarchy_sort,is_action_list=True,action_group_id=self.action_group_id)
 

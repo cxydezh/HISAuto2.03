@@ -137,7 +137,6 @@ class home_tab_action_group_func:
                             max_sort_num = group_item.sort_num
                 #生成新增行为组记录
                 new_action_group = ActionGroup(
-                    action_list_group_name=self.group_name,
                     action_list_group_note=self.group_desc,
                     is_auto=self.is_auto,
                     auto_time=self.auto_time,
@@ -163,7 +162,6 @@ class home_tab_action_group_func:
                     group = session.query(ActionGroup).filter_by(id=self.action_group_id).first()
                     if group:
                         #更新group表的记录
-                        group.action_list_group_name = self.group_name
                         group.action_list_group_note = self.group_desc
                         group.is_auto = self.is_auto
                         group.auto_time = self.auto_time
@@ -471,14 +469,7 @@ class ActionManager:
                 session = self._get_session()
                 if not session:
                     return False
-                if action_type == "list_hierarchy":
-                    list_hierarchy = session.query(ListGroupHierarchy).filter_by(id=current_action_list_hierarchy_id).first()
-                    if list_hierarchy:
-                        session.delete(list_hierarchy)
-                        session.commit()
-                        messagebox.showinfo("成功", "列表层级删除成功")
-                        return True
-                elif action_type == "mouse":
+                if  action_type == "mouse":
                     action = session.query(ActionMouse).filter_by(id=current_action_id).first()
                     if action:
                         session.delete(action)
@@ -778,6 +769,7 @@ class ActionManager:
         if not selected:
             return
         iid = selected[0]
+        selected_type = self.home_tab.action_debug_list.item(iid, "values")[1]
         
         # 先全部禁用
         self._set_home_controls_state('disabled')
@@ -796,9 +788,9 @@ class ActionManager:
             if not session:
                 return
                 
-            if iid.startswith("group_"):
+            if selected_type == "group":
                 # 选中的是ActionGroup
-                group_id = int(iid.split("_")[1])
+                group_id = iid
                 group = session.query(ActionGroup).filter_by(id=group_id).first()
                 if group:
                     # 启用按钮

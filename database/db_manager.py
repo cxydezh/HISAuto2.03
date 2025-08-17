@@ -7,8 +7,8 @@ import os
 import sqlite3
 from urllib.parse import quote_plus
 import inspect
-from models.actions import ActionGroup, ActionKeyboard, ActionList, ActionMouse, ActionsGroupHierarchy,ActionCodeTxt,ActionPrintscreen,ActionAI,ActionFunction,ActionClass,ListGroupHierarchy
 from models.action_suit import ActionSuitAI, ActionSuitClass, ActionSuitCodeTxt, ActionSuitFunction, ActionsSuitGroup, ActionSuitKeyboard,ActionSuitMouse, ActionSuitPrintscreen, ActionsSuitGroupHierarchy,ActionSuitList,ActionsSuitGroup,ActionSuitMouse,ActionSuitKeyboard,ActionSuitCodeTxt,ActionSuitPrintscreen,ActionSuitAI,ActionSuitFunction,ActionSuitClass
+from models.actions import ActionAI, ActionClass, ActionCodeTxt, ActionFunction, ActionGroup, ActionKeyboard, ActionList, ActionMouse, ActionPrintscreen, ActionsGroupHierarchy
 from models.debug_actions import ActionsDebugGroup,ActionDebugList,ActionsDebugGroup,ActionDebugMouse,ActionDebugKeyboard,ActionDebugCodeTxt,ActionDebugPrintscreen,ActionDebugAI,ActionDebugFunction,ActionDebugClass, ActionsDebugGroupHierarchy
 from models.base import Base 
 from models.department import Department
@@ -37,7 +37,6 @@ class DatabaseManager:
         "ActionAI": ActionAI,
         "ActionFunction": ActionFunction,
         "ActionClass": ActionClass,
-        "ListGroupHierarchy": ListGroupHierarchy,
         "ActionGroupHierarchy": ActionsGroupHierarchy,
         "ActionSuitGroupHierarchy": ActionsSuitGroupHierarchy,
         "ActionDebugGroupHierarchy": ActionsDebugGroupHierarchy,
