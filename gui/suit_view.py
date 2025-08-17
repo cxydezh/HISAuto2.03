@@ -156,7 +156,7 @@ class SuitView(tk.Toplevel):
         ttk.Label(right_frame, text="行为元类型:").grid(row=0, column=0, padx=5, pady=5)
         self.action_type_var = tk.StringVar()
         action_type_combo = ttk.Combobox(right_frame, 
-                     values=["mouse", "keyboard", "class", "AI","image","function"],
+                     values=["mouse", "keyboard", "class", "AI","image","function","group"],
                      state="readonly",
                      textvariable=self.action_type_var)
         action_type_combo.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)

@@ -15,7 +15,7 @@ from pynput import mouse, keyboard
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
 from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt
-from models.action_suit import ActionsSuitGroup, ActionsSuitList, ActionsSuitGroupHierarchy, ActionSuitMouse, ActionSuitKeyboard, ActionSuitCodeTxt, ActionSuitPrintscreen, ActionSuitAI, ActionSuitFunction, ActionSuitClass
+from models.action_suit import ActionsSuitGroup, ActionSuitList, ActionsSuitGroupHierarchy, ActionSuitMouse, ActionSuitKeyboard, ActionSuitCodeTxt, ActionSuitPrintscreen, ActionSuitAI, ActionSuitFunction, ActionSuitClass
 from models.debug_actions import ActionsDebugGroup, ActionDebugList, ActionsDebugGroupHierarchy, ActionDebugMouse, ActionDebugKeyboard, ActionDebugCodeTxt, ActionDebugPrintscreen, ActionDebugAI, ActionDebugFunction, ActionDebugClass
 from models.user import User
 from models.department import Department
@@ -42,7 +42,7 @@ class hometab_funcData:
         "ActionClass": ActionClass,
         
         # Action_suit 相关模型
-        "ActionsSuitList": ActionsSuitList,
+        "ActionSuitList": ActionSuitList,
         "ActionSuitGroup": ActionsSuitGroup,
         "ActionsSuitGroupHierarchy": ActionsSuitGroupHierarchy,
         "ActionSuitMouse": ActionSuitMouse,
@@ -138,7 +138,7 @@ class hometab_funcData:
                 cls.sheet_action_function = "ActionFunction"
                 cls.sheet_action_class = "ActionClass"
             elif sheet_type == "Action_suit":
-                cls.sheet_list = "ActionsSuitList"
+                cls.sheet_list = "ActionSuitList"
                 cls.sheet_listgroup = "ActionSuitGroup"
                 cls.sheet_hierarchy = "ActionsSuitGroupHierarchy"
                 cls.sheet_action_mouse = "ActionSuitMouse"
@@ -149,7 +149,7 @@ class hometab_funcData:
                 cls.sheet_action_function = "ActionSuitFunction"
                 cls.sheet_action_class = "ActionSuitClass"
             elif sheet_type == "Action_suit_list":
-                cls.sheet_list = "ActionsSuitList"
+                cls.sheet_list = "ActionSuitList"
                 cls.sheet_listgroup = "ActionSuitGroup"
                 cls.sheet_hierarchy = "ListSuitHierarchy"
                 cls.sheet_action_mouse = "ActionSuitMouse"
@@ -576,218 +576,218 @@ class hometab_funcData:
             print(traceback.format_exc())
             return False
     @classmethod
-    def _load_action_group_data(cls, sheet_type, action_treeview,action_list_id=None):
-        """加载行为组数据,其中sheet_type:行为组表类型（如Action,Action_list,Action_suit,Action_suit_list,debug_action,debug_action_list）,action_treeview:行为组树视图"""
+    def _load_action_group_data(cls, workTreeview, treeDatatxt):
+        """
+        根据要求为接受的Treeview类型的参数进行树结构的数据填充
+        
+        Args:
+            workTreeview: Treeview控件类型数据
+            treeDatatxt: 用来描述用什么数据填充树形控件的数据，为text格式
+                        可以是：ActionList、ActionsGroupHierarchy、ActionSuitList、ActionsSuitGroupHierarchy、ActionDebugList、ActionsDebugGroupHierarchy
+        
+        Returns:
+            bool: 成功返回True，失败返回False
+        """
         try:
             session = cls._get_session()
             if not session:
                 return False
-            cls.action_treeview = action_treeview
-            if sheet_type == "Action":
-                cls.sheet_listgroup = "ActionGroup"
-                cls.sheet_hierarchy = "ActionsGroupHierarchy"
-            elif sheet_type == "Action_list":
-                cls.sheet_listgroup = "ActionListGroup"
-                cls.sheet_hierarchy = "ActionsGroupHierarchy"
-            elif sheet_type == "Action_suit":
-                cls.sheet_listgroup = "ActionSuitGroup"
-                cls.sheet_hierarchy = "ActionsSuitGroupHierarchy"
-            elif sheet_type == "Action_suit_list":
-                cls.sheet_listgroup = "ActionSuitListGroup"
-                cls.sheet_hierarchy = "ActionsSuitGroupHierarchy"
-            elif sheet_type == "debug_action":
-                cls.sheet_listgroup = "ActionDebugGroup"
-                cls.sheet_hierarchy = "ActionsDebugGroupHierarchy"
-            elif sheet_type == "debug_action_list":
-                cls.sheet_listgroup = "ActionDebugListGroup"
-                cls.sheet_hierarchy = "ActionsDebugGroupHierarchy"
+            
+            # 清空树控件
+            workTreeview.delete(*workTreeview.get_children())
+            
+            # 根据treeDatatxt确定要使用的模型和字段
+            if treeDatatxt in ["ActionList", "ActionSuitList", "ActionDebugList"]:
+                # 使用list_rank字段进行分组，action_sort_num字段进行排序
+                cls._load_list_data(workTreeview, treeDatatxt, session)
+            elif treeDatatxt in ["ActionsGroupHierarchy", "ActionsSuitGroupHierarchy", "ActionsDebugGroupHierarchy"]:
+                # 使用group_rank字段进行分组，sort_num字段进行排序
+                cls._load_hierarchy_data(workTreeview, treeDatatxt, session)
             else:
-                logger.error(f"无效的行为组类型: {sheet_type}")
+                logger.error(f"无效的treeDatatxt: {treeDatatxt}")
                 return False
-            cls.sheet_hierarchy_model = cls._get_model_class(cls.sheet_hierarchy)
-            if not cls.sheet_hierarchy_model:
-                logger.error("无法获取模型类")
-                return False
-            cls.sheet_listgroup_model = cls._get_model_class(cls.sheet_listgroup)
-            if not cls.sheet_listgroup_model:
-                logger.error("无法获取模型类")
-                return False
-            # 清空树
-            cls.action_treeview.delete(*cls.action_treeview.get_children())
-            # 获取所有层级数据
-            hierarchy_groups = {}
-            if sheet_type == "Action_list" or sheet_type == "Action_suit_list" or sheet_type == "debug_action_list":
-                hierarchies = session.query(cls.sheet_hierarchy_model).filter_by(group_id=action_list_id).all()
-            else:
-                hierarchies = session.query(cls.sheet_hierarchy_model).all()
-            for hierarchy in hierarchies:
-                rank_dict = parse_group_rank(hierarchy.group_rank)
-                parent_key = cls._get_parent_key(rank_dict)
-                if parent_key not in hierarchy_groups:
-                    hierarchy_groups[parent_key] = []
-                hierarchy_groups[parent_key].append(hierarchy)
-            for parent_key in hierarchy_groups:
-                hierarchy_groups[parent_key].sort(key=lambda x: x.sort_num)
-            # 按照父节点key排序，然后合并所有组
-            sorted_parent_keys = sorted(hierarchy_groups.keys())
-            sorted_hierarchies = []
-            for parent_key in sorted_parent_keys:
-                sorted_hierarchies.extend(hierarchy_groups[parent_key])
-            hierarchies = sorted_hierarchies
-            # 使用ActionGroupManager构建树形结构
-            tree_dict = cls.build_tree_structure(hierarchies)
-            # 递归插入节点到Treeview
-            def insert_node(key, parent_iid):
-                if key not in tree_dict:
-                    return
-                node = tree_dict[key]
-                h = node['obj']
-                user = session.query(User).filter_by(id=h.doctor_id).first()
-                username = user.username if user else "未知"
-                # 插入当前节点
-                if parent_iid == "":
-                    cls.action_treeview.insert("", "end", iid=node['iid'], text=h.group_name, 
-                                          values=(h.group_name, username))
-                else:
-                    cls.action_treeview.insert(parent_iid, "end", iid=node['iid'], text="📁", 
-                                          values=(h.group_name, username))
-                # 插入子节点
-                for child_key in node['children']:
-                    insert_node(child_key, node['iid'])
-            # 插入顶层节点（A级节点，B=C=D=E=0）    
-            inserted_nodes = set()  # 记录已插入的节点，避免重复
-            for key, node in tree_dict.items():
-                rank = parse_group_rank(key)
-                if rank['B'] == 0 and rank['C'] == 0 and rank['D'] == 0 and rank['E'] == 0:
-                    if key not in inserted_nodes:
-                        insert_node(key, "")
-                        inserted_nodes.add(key)
-            # 查询所有行为组，插入到对应层级下
-            groups = session.query(cls.sheet_listgroup_model).all()
-            for group in groups:
-                if not hasattr(group, 'group_rank_id') or not group.group_rank_id:
-                    continue
-                # 获取行为组对应的层级
-                rank_record = session.query(cls.sheet_hierarchy_model).filter_by(id=group.group_rank_id).first()
-                if not rank_record:
-                    continue
-                rank_dict = parse_group_rank(rank_record.group_rank)
-                # 确定行为组应该插入到哪个层级节点下
-                if rank_dict['E'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
-                elif rank_dict['D'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}"
-                elif rank_dict['C'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}"
-                elif rank_dict['B'] > 0:
-                    parent_iid = f"A{rank_dict['A']}B{rank_dict['B']}"
-                else:
-                    parent_iid = f"A{rank_dict['A']}"
-                # 检查父节点是否存在
-                if cls.action_treeview.exists(parent_iid):
-                    user = session.query(User).filter_by(id=group.user_id).first()
-                    username = user.username if user else "未知"
-                    # 插入行为组节点
-                    cls.action_treeview.insert(parent_iid, "end", text="📄", 
-                                              values=(group.action_list_group_name, username), 
-                                              iid=f"group_{group.id}")
-                else:
-                    # 父节点不存在，跳过这个行为组
-                    continue
+            
             return True
+            
         except Exception as e:
             logger.error(f"加载行为组数据失败: {str(e)}")
             print(traceback.format_exc())
+            return False
         finally:
-            print("加载行为组数据成功-强制关闭session")
-            session.close()
+            if session:
+                session.close()
+    
     @classmethod
-    def build_tree_structure(self, hierarchies):
-        """构建树形结构数据"""
-        tree_dict = {}
-        
-        for h in hierarchies:
-            rank_dict = parse_group_rank(h.group_rank)
-            key = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
-            
-            # 根据用户权限过滤
-            if globalvariable.USER_IS_SUPER_ADMIN:
-                tree_dict[key] = {
-                    'obj': h,
-                    'iid': None,
-                    'children': [],
-                    'parent': None
-                }
+    def _load_list_data(cls, workTreeview, treeDatatxt, session):
+        """加载ActionList、ActionSuitList、ActionDebugList类型的数据"""
+        try:
+            # 根据treeDatatxt确定模型
+            if treeDatatxt == "ActionList":
+                model = ActionList
+            elif treeDatatxt == "ActionSuitList":
+                model = ActionSuitList
+            elif treeDatatxt == "ActionDebugList":
+                model = ActionDebugList
             else:
-                # 普通用户只能看到全局(A=2)或自己科室的层级
-                if rank_dict['A'] == 2 or h.department_id == globalvariable.USER_DEPARTMENT_ID:
-                    tree_dict[key] = {
-                        'obj': h,
-                        'iid': None,
-                        'children': [],
-                        'parent': None
-                    }
-        
-        # 建立父子关系
-        for key, node in tree_dict.items():
-            rank = parse_group_rank(key)
+                return
             
-            # 确定父节点key和当前节点iid
-            if rank['E'] > 0:
-                parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E0"
-                parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
-                node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E{rank['E']}"
-            elif rank['D'] > 0:
-                parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D0E0"
-                parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}"
-                node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
-            elif rank['C'] > 0:
-                parent_key = f"A{rank['A']}B{rank['B']}C0D0E0"
-                parent_iid = f"A{rank['A']}B{rank['B']}"
-                node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}"
-            elif rank['B'] > 0:
-                parent_key = f"A{rank['A']}B0C0D0E0"
-                parent_iid = f"A{rank['A']}"
-                node['iid'] = f"A{rank['A']}B{rank['B']}"
-            else:
-                parent_key = None
-                parent_iid = None
-                node['iid'] = f"A{rank['A']}"
+            # 获取所有数据，按list_rank分组，按action_sort_num排序
+            all_records = session.query(model).all()
             
-            # 设置父子关系
-            if parent_key and parent_key in tree_dict:
-                node['parent'] = parent_iid
-                tree_dict[parent_key]['children'].append(key)
-            else:
-                node['parent'] = None
-        
-        return tree_dict
+            # 按list_rank分组
+            grouped_data = {}
+            for record in all_records:
+                if record.list_rank:
+                    rank_dict = parse_group_rank(record.list_rank)
+                    # 创建分组键
+                    group_key = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
+                    if group_key not in grouped_data:
+                        grouped_data[group_key] = []
+                    grouped_data[group_key].append(record)
+            
+            # 对每个分组内的数据按action_sort_num排序
+            for group_key in grouped_data:
+                grouped_data[group_key].sort(key=lambda x: x.action_sort_num or 0)
+            
+            # 构建树形结构
+            cls._build_tree_from_grouped_data(workTreeview, grouped_data, "list")
+            
+        except Exception as e:
+            logger.error(f"加载列表数据失败: {str(e)}")
+            print(traceback.format_exc())
+    
     @classmethod
-    def _get_parent_key(self, rank_dict):
-        """获取父节点key
-        
-        Args:
-            rank_dict: 解析后的group_rank字典
+    def _load_hierarchy_data(cls, workTreeview, treeDatatxt, session):
+        """加载ActionsGroupHierarchy、ActionsSuitGroupHierarchy、ActionsDebugGroupHierarchy类型的数据"""
+        try:
+            # 根据treeDatatxt确定模型
+            if treeDatatxt == "ActionsGroupHierarchy":
+                model = ActionsGroupHierarchy
+            elif treeDatatxt == "ActionsSuitGroupHierarchy":
+                model = ActionsSuitGroupHierarchy
+            elif treeDatatxt == "ActionsDebugGroupHierarchy":
+                model = ActionsDebugGroupHierarchy
+            else:
+                return
             
-        Returns:
-            str: 父节点key
-        """
+            # 获取所有数据
+            all_records = session.query(model).all()
+            
+            # 按group_rank分组，按sort_num排序
+            grouped_data = {}
+            for record in all_records:
+                if record.group_rank:
+                    rank_dict = parse_group_rank(record.group_rank)
+                    # 创建分组键
+                    group_key = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
+                    if group_key not in grouped_data:
+                        grouped_data[group_key] = []
+                    grouped_data[group_key].append(record)
+            
+            # 对每个分组内的数据按sort_num排序
+            for group_key in grouped_data:
+                grouped_data[group_key].sort(key=lambda x: x.sort_num or 0)
+            
+            # 构建树形结构
+            cls._build_tree_from_grouped_data(workTreeview, grouped_data, "hierarchy")
+            
+        except Exception as e:
+            logger.error(f"加载层级数据失败: {str(e)}")
+            print(traceback.format_exc())
+    
+    @classmethod
+    def _build_tree_from_grouped_data(cls, workTreeview, grouped_data, data_type):
+        """根据分组数据构建树形结构"""
+        try:
+            # 按分组键排序，确保树的层级结构正确
+            sorted_keys = sorted(grouped_data.keys(), key=lambda x: cls._get_sort_key(x))
+            
+            # 记录已插入的节点，避免重复
+            inserted_nodes = set()
+            
+            for group_key in sorted_keys:
+                records = grouped_data[group_key]
+                
+                for record in records:
+                    # 确定节点的iid
+                    if data_type == "list":
+                        iid = cls._parse_list_rank_to_iid(record.list_rank)
+                    else:  # hierarchy
+                        iid = cls._parse_group_rank_to_iid(record.group_rank)
+                    
+                    if not iid or iid in inserted_nodes:
+                        continue
+                    
+                    # 确定父节点iid
+                    parent_iid = cls._get_parent_iid(iid)
+                    
+                    # 确定节点文本和图标
+                    if data_type == "list":
+                        text_name = "📁" if record.action_type == "group" else "📄"
+                        values = (record.action_name or "", record.action_note or "", record.id)
+                    else:  # hierarchy
+                        text_name = "📁" if hasattr(record, 'group_type') and record.group_type == "group" else "📄"
+                        values = (record.group_name or "", getattr(record, 'group_note', "") or "", record.id)
+                    
+                    # 插入节点
+                    if parent_iid and workTreeview.exists(parent_iid):
+                        workTreeview.insert(parent_iid, "end", iid=iid, text=text_name, values=values)
+                    elif not parent_iid:
+                        workTreeview.insert("", "end", iid=iid, text=text_name, values=values)
+                    
+                    inserted_nodes.add(iid)
+                    
+        except Exception as e:
+            logger.error(f"构建树形结构失败: {str(e)}")
+            print(traceback.format_exc())
+    
+    @classmethod
+    def _parse_list_rank_to_iid(cls, list_rank):
+        """将list_rank转换为iid格式"""
+        if not list_rank:
+            return None
+        rank_dict = parse_group_rank(list_rank)
+        return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
+    
+    @classmethod
+    def _parse_group_rank_to_iid(cls, group_rank):
+        """将group_rank转换为iid格式"""
+        if not group_rank:
+            return None
+        rank_dict = parse_group_rank(group_rank)
+        return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
+    
+    @classmethod
+    def _get_parent_iid(cls, iid):
+        """根据当前iid获取父节点iid"""
+        if not iid:
+            return None
+        
+        rank_dict = parse_group_rank(iid)
+        
         # 根据层级确定父节点
         if rank_dict['E'] > 0:
-            # E有值，父节点是D
             return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}"
         elif rank_dict['D'] > 0:
-            # D有值，父节点是C
             return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}"
         elif rank_dict['C'] > 0:
-            # C有值，父节点是B
             return f"A{rank_dict['A']}B{rank_dict['B']}"
         elif rank_dict['B'] > 0:
-            # B有值，父节点是A
             return f"A{rank_dict['A']}"
         else:
-            # A有值，这是顶级节点
-            return f"A{rank_dict['A']}"
+            return None  # A级节点没有父节点
+    
+    @classmethod
+    def _get_sort_key(cls, group_key):
+        """获取用于排序的键值"""
+        if not group_key:
+            return ""
+        
+        rank_dict = parse_group_rank(group_key)
+        
+        # 创建排序键，确保层级结构正确
+        # 格式：A级_B级_C级_D级_E级
+        return f"{rank_dict['A']:03d}_{rank_dict['B']:03d}_{rank_dict['C']:03d}_{rank_dict['D']:03d}_{rank_dict['E']:03d}"
     @classmethod
     def _save_action_group_hierarchy_data(cls, sheet_type,hierarchy_id,group_name,group_note,is_auto,auto_time):
         """保存行为组层级信息,其中sheet_type:行为组表类型（如Action,Action_suit,debug_action）,iid:获取的树节点的iid,hierarchy_id:行为组层次id,group_id:行为组id"""

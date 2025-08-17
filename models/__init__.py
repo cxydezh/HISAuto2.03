@@ -8,7 +8,7 @@ from models.actions import (
 from models.action_suit import (
     ActionSuitMouse, ActionSuitKeyboard, ActionSuitCodeTxt,
     ActionSuitPrintscreen, ActionSuitAI, ActionSuitFunction,
-    ActionSuitClass, ActionsSuitList, ActionsSuitGroup,
+    ActionSuitClass, ActionSuitList, ActionsSuitGroup,
     ActionsSuitGroupHierarchy
 )
 from models.debug_actions import (
@@ -43,7 +43,7 @@ __all__ = [
     'ActionSuitAI',
     'ActionSuitFunction',
     'ActionSuitClass',
-    'ActionsSuitList',
+    'ActionSuitList',
     'ActionsSuitGroup',
     'ActionsSuitGroupHierarchy',
     'ActionDebugMouse',

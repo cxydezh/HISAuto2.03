@@ -15,7 +15,7 @@ from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
 from gui.tabs.home_tab import prevent_double_click
 from models.action_suit import (
-    ActionsSuitGroup, ActionsSuitList, ActionsSuitGroupHierarchy,
+    ActionsSuitGroup, ActionSuitList, ActionsSuitGroupHierarchy,
     ActionSuitMouse, ActionSuitKeyboard, ActionSuitClass, ActionSuitAI, 
     ActionSuitPrintscreen, ActionSuitFunction, ActionSuitCodeTxt
 )
@@ -114,7 +114,7 @@ class SuitViewFunc:
             
             if suit_id:
                 # 加载指定组套下的行为列表
-                actions = session.query(ActionsSuitList).filter_by(group_id=suit_id).all()
+                actions = session.query(ActionSuitList).filter_by(group_id=suit_id).all()
                 
                 for action in actions:
                     # 获取行为类型的中文描述
@@ -123,7 +123,7 @@ class SuitViewFunc:
                     # 获取下一个行为的名称
                     next_action_name = ""
                     if action.next_id:
-                        next_action = session.query(ActionsSuitList).filter_by(id=action.next_id).first()
+                        next_action = session.query(ActionSuitList).filter_by(id=action.next_id).first()
                         if next_action:
                             next_action_name = next_action.action_name
                     
@@ -950,7 +950,7 @@ class SuitViewFunc:
             if not session:
                 return False
             
-            action = session.query(ActionsSuitList).filter_by(id=action_id).first()
+            action = session.query(ActionSuitList).filter_by(id=action_id).first()
             if action:
                 # 清空表单
                 self.clear_action_form()
@@ -1237,7 +1237,7 @@ class SuitViewFunc:
             # 检查是新建还是编辑
             if hasattr(self, 'current_action_id') and self.current_action_id:
                 # 编辑模式
-                action = session.query(ActionsSuitList).filter_by(id=self.current_action_id).first()
+                action = session.query(ActionSuitList).filter_by(id=self.current_action_id).first()
                 if action:
                     action.action_type = action_type
                     action.action_name = action_name
@@ -1261,10 +1261,10 @@ class SuitViewFunc:
                     return
                 
                 # 获取最大排序号
-                max_sort = session.query(ActionsSuitList).filter_by(group_id=self.current_suit_id).order_by(ActionsSuitList.sort_num.desc()).first()
+                max_sort = session.query(ActionSuitList).filter_by(group_id=self.current_suit_id).order_by(ActionSuitList.sort_num.desc()).first()
                 new_sort_num = (max_sort.sort_num + 1) if max_sort else 1
                 
-                new_action = ActionsSuitList(
+                new_action = ActionSuitList(
                     group_id=self.current_suit_id,
                     action_type=action_type,
                     action_name=action_name,
@@ -1529,7 +1529,7 @@ class SuitViewFunc:
                 return False
             
             # 获取行为信息用于确认
-            action = session.query(ActionsSuitList).filter_by(id=action_id).first()
+            action = session.query(ActionSuitList).filter_by(id=action_id).first()
             if not action:
                 messagebox.showerror("错误", "未找到要删除的行为")
                 return

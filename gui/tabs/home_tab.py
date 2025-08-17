@@ -450,7 +450,7 @@ class HomeTab(BaseTab):
         ttk.Label(content_frame, text="行为类型:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_type_var = tk.StringVar()
         self.action_type_combo = ttk.Combobox(content_frame, 
-                                            values=["list_hierarchy","mouse", "keyboard", "class", "AI", "image", "function"],
+                                            values=["list_hierarchy","mouse", "keyboard", "class", "AI", "image", "function","group"],
                                             state="readonly", textvariable=self.action_type_var)
         self.action_type_combo.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
         
@@ -583,7 +583,7 @@ class HomeTab(BaseTab):
         ttk.Label(content_debug_frame, text="行为类型:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_debug_type_var = tk.StringVar()
         self.action_debug_type_combo = ttk.Combobox(content_debug_frame, 
-                                                   values=["list_hierarchy","mouse", "keyboard", "class", "AI", "image", "function"],
+                                                   values=["list_hierarchy","mouse", "keyboard", "class", "AI", "image", "function","group"],
                                                    state="readonly", textvariable=self.action_debug_type_var)
         self.action_debug_type_combo.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
         
@@ -1133,7 +1133,8 @@ class HomeTab(BaseTab):
             self._create_image_controls()
         elif action_type == "function":
             self._create_function_controls()
-            
+        elif action_type == "group":
+            self._create_group_controls()
         # 强制更新界面
         self.action_list_frame.update_idletasks()
     
@@ -1147,6 +1148,9 @@ class HomeTab(BaseTab):
         ttk.Label(self.action_list_frame, text="备注:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_list_hierarchy_note_var = tk.StringVar(master=self.frame)
         ttk.Entry(self.action_list_frame, textvariable=self.action_list_hierarchy_note_var).grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+    def _create_group_controls(self):
+        """创建组控件"""
+        ttk.Label(self.action_list_frame, text="欢迎来到AI世界").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
     def _create_mouse_controls(self):
         """创建鼠标控件"""
         # 创建左右两列Frame容器
@@ -1676,10 +1680,15 @@ class HomeTab(BaseTab):
             self._create_image_controls_debug()
         elif action_type == "function":
             self._create_function_controls_debug()
+        elif action_type == "group":
+            self._create_group_controls_debug()
             
         # 强制更新界面
         self.action_debug_detail.update_idletasks()
-    
+    def _create_group_controls_debug(self):
+        """创建调试组控件"""
+        ttk.Label(self.action_debug_detail, text="欢迎来到组控件调试世界").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        
     # 调试动态控件创建方法（按类型顺序：mouse -> keyboard -> class -> AI -> image -> function）
     def _create_mouse_controls_debug(self):
         """创建调试鼠标控件"""

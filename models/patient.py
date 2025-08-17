@@ -12,6 +12,7 @@ class PatientList(BaseModel):
     patient_name = Column(String(100), nullable=False)  # 患者姓名
     patient_id = Column(String(50), nullable=False)  # 病历号
     patient_age = Column(Integer)  # 患者年龄
+    patient_gender = Column(String(10))  # 患者性别
     patient_ward = Column(String(50), nullable=False)  # 病区
     patient_department_id = Column(String(50), ForeignKey('departments.code'), nullable=False)  # 科室
     attending_doctor_id = Column(Integer, ForeignKey('users.user_id'))  # 主治医生ID
@@ -79,6 +80,7 @@ class PatientListBackup(BaseModel):
     patient_name = Column(String(100), nullable=False)  # 患者姓名
     patient_id = Column(String(50), nullable=False)  # 病历号
     patient_age = Column(Integer)  # 患者年龄
+    patient_gender = Column(String(10))  # 患者性别
     patient_ward = Column(String(50), nullable=False)  # 病区
     patient_department_id = Column(String(50), ForeignKey('departments.code'), nullable=False)  # 科室
     attending_doctor_id = Column(Integer, ForeignKey('users.user_id'))  # 主治医生ID
@@ -96,3 +98,35 @@ class PatientListBackup(BaseModel):
     fellow_doctor = relationship("User", foreign_keys=[fellow_doctor_id])
     resistant_doctor = relationship("User", foreign_keys=[resistant_doctor_id])
     patient_department = relationship("Department", foreign_keys=[patient_department_id])   
+
+class PatientAIResult(BaseModel):
+    """患者AI结果"""
+    __tablename__ = 'patient_ai_result'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
+    record_id = Column(String(50), ForeignKey('patient_list.id'), nullable=False)  # 记录ID
+    patient_id = Column(String(50), ForeignKey('patient_list.patient_id'), nullable=False)  # 患者ID
+    func_list_id = Column(String(50), ForeignKey('list_group_hierarchy.id'), nullable=False)  # 功能列表ID
+    ai_result = Column(String(15000))  # AI结果
+
+    # 关系
+    record = relationship("PatientList", foreign_keys=[record_id])
+    patient = relationship("PatientList", foreign_keys=[patient_id])
+    func_list = relationship("ListGroupHierarchy", foreign_keys=[func_list_id])
+
+class PatientAIResultBackup(BaseModel):
+    """患者AI结果备份"""
+    __tablename__ = 'patient_ai_result_backup'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
+    record_id = Column(String(50), ForeignKey('patient_list.id'), nullable=False)  # 记录ID
+    patient_id = Column(String(50), ForeignKey('patient_list.patient_id'), nullable=False)  # 患者ID
+    func_list_id = Column(String(50), ForeignKey('list_group_hierarchy.id'), nullable=False)  # 功能列表ID
+    ai_result = Column(String(15000))  # AI结果备份
+
+    # 关系
+    record = relationship("PatientList", foreign_keys=[record_id])
+    patient = relationship("PatientList", foreign_keys=[patient_id])
+    func_list = relationship("ListGroupHierarchy", foreign_keys=[func_list_id])

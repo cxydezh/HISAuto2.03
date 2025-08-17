@@ -1401,8 +1401,6 @@ class ActionGroupManager:
             
         try:
             if sheet_name == "ActionGroup":
-                # 获取行为组list_hierarchy
-                list_hierarchy = session.query(ListGroupHierarchy).filter_by(group_id=group_id).all()
                 # 获取行为组
                 group = session.query(ActionGroup).filter_by(id=group_id).first()
                 # 获取关联的层级信息
@@ -1410,8 +1408,6 @@ class ActionGroupManager:
                 # 获取行为列表
                 actions = session.query(ActionList).filter_by(group_id=group_id).all()
             elif sheet_name == "ActionsDebugGroup":
-                # 获取行为组list_hierarchy
-                list_hierarchy = session.query(ListGroupHierarchy).filter_by(group_id=group_id).all()
                 # 获取行为组
                 group = session.query(ActionGroup).filter_by(id=group_id).first()
                 # 获取关联的层级信息
@@ -1419,8 +1415,6 @@ class ActionGroupManager:
                 # 获取行为列表
                 actions = session.query(ActionList).filter_by(group_id=group_id).all()
             elif sheet_name == "ActionsSuitGroup":
-                # 获取行为组list_hierarchy
-                list_hierarchy = session.query(ListGroupHierarchy).filter_by(group_id=group_id).all()
                 # 获取行为组
                 group = session.query(ActionsSuitGroup).filter_by(id=group_id).first()
                 # 获取关联的层级信息
@@ -1432,7 +1426,6 @@ class ActionGroupManager:
             # 获取用户信息
             user = session.query(User).filter_by(user_id=group.user_id).first()
             return {
-                'list_hierarchy': list_hierarchy,
                 'group': group,
                 'hierarchy': hierarchy,
                 'user': user,

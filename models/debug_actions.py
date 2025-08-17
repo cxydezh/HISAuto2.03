@@ -192,6 +192,8 @@ class ActionDebugList(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     group_id = Column(Integer, ForeignKey('actions_debug_group.id',ondelete='CASCADE'))  # 行为组的编号
     action_type = Column(String(50), nullable=False)  # 行为类型
+    list_rank = Column(String(50))  # 组级别
+    action_sort_num = Column(Integer)  # 行为排序编码
     action_name = Column(String(200))  # 行为名称
     next_id = Column(Integer)  # 下一步的行为ID
     back_id = Column(Integer)  # 返回ID
@@ -206,27 +208,8 @@ class ActionDebugList(BaseModel):
     function_actions = relationship("ActionDebugFunction", back_populates="action_list")
     class_actions = relationship("ActionDebugClass", back_populates="action_list")
     debug_group = relationship("ActionsDebugGroup", back_populates="action_lists", foreign_keys=[group_id])
-    list_debug_hierarchy = relationship("ListDebugHierarchy", back_populates="action_lists") 
     def __repr__(self):
         return f"<ActionDebugList(id={self.id}, name={self.action_name})>"
-class ListDebugHierarchy(BaseModel):
-    """行为组分层"""
-    __tablename__ = 'list_debug_hierarchy'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
-    group_id = Column(Integer, ForeignKey('actions_debug_group.id',ondelete='CASCADE'))
-    list_name = Column(String(200))  # 组名称
-    list_rank = Column(String(50))  # 组级别
-    sort_num = Column(Integer)  # 排序编码
-    user_id = Column(String(50), ForeignKey('users.user_id'))  # 医生ID
-    department_id = Column(Integer, ForeignKey('departments.code'))  # 科室ID
-    group_note = Column(String(500))  # 组备注
-
-    # 关系
-    action_lists = relationship("ActionDebugList", back_populates="list_debug_hierarchy")
-    action_debug_groups = relationship("ActionsDebugGroup", back_populates="list_debug_hierarchy")
-    def __repr__(self):
-        return f"<ListDebugHierarchy(id={self.id}, name={self.group_name})>" 
 class ActionsDebugGroup(BaseModel):
     """Debug行为组表"""
     __tablename__ = 'actions_debug_group'
@@ -234,7 +217,6 @@ class ActionsDebugGroup(BaseModel):
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     sort_num = Column(Integer)  # 排序编码
-    action_list_group_name = Column(String(200))  # 行为组名称
     group_rank = Column(String(50))  # 组级别
     excel_name = Column(String(200))  # Excel文件名
     excel_sheet_num = Column(Integer)  # Sheet编号
@@ -252,7 +234,6 @@ class ActionsDebugGroup(BaseModel):
     action_debug_group_hierarchy = relationship("ActionsDebugGroupHierarchy", back_populates="action_debug_groups")
     user = relationship("User", back_populates="action_debug_groups")
     department = relationship("Department", back_populates="action_debug_groups")
-    list_debug_hierarchy = relationship("ListDebugHierarchy", back_populates="action_debug_groups")
     
 class ActionsDebugGroupHierarchy(BaseModel):
     """Debug行为组分层"""
@@ -262,6 +243,7 @@ class ActionsDebugGroupHierarchy(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     group_name = Column(String(200))  # 组名称
     group_rank = Column(String(50))  # 组级别
+    group_type = Column(String(50))  # 组类型
     sort_num = Column(Integer)  # 排序编码
     doctor_id = Column(Integer, ForeignKey('users.id'))  # 医生ID
     department_id = Column(Integer, ForeignKey('departments.id'))  # 科室ID

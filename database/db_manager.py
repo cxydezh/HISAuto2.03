@@ -8,7 +8,7 @@ import sqlite3
 from urllib.parse import quote_plus
 import inspect
 from models.actions import ActionGroup, ActionKeyboard, ActionList, ActionMouse, ActionsGroupHierarchy,ActionCodeTxt,ActionPrintscreen,ActionAI,ActionFunction,ActionClass,ListGroupHierarchy
-from models.action_suit import ActionSuitAI, ActionSuitClass, ActionSuitCodeTxt, ActionSuitFunction, ActionsSuitGroup, ActionSuitKeyboard,ActionSuitMouse, ActionSuitPrintscreen, ActionsSuitGroupHierarchy,ActionsSuitList,ActionsSuitGroup,ActionSuitMouse,ActionSuitKeyboard,ActionSuitCodeTxt,ActionSuitPrintscreen,ActionSuitAI,ActionSuitFunction,ActionSuitClass
+from models.action_suit import ActionSuitAI, ActionSuitClass, ActionSuitCodeTxt, ActionSuitFunction, ActionsSuitGroup, ActionSuitKeyboard,ActionSuitMouse, ActionSuitPrintscreen, ActionsSuitGroupHierarchy,ActionSuitList,ActionsSuitGroup,ActionSuitMouse,ActionSuitKeyboard,ActionSuitCodeTxt,ActionSuitPrintscreen,ActionSuitAI,ActionSuitFunction,ActionSuitClass
 from models.debug_actions import ActionsDebugGroup,ActionDebugList,ActionsDebugGroup,ActionDebugMouse,ActionDebugKeyboard,ActionDebugCodeTxt,ActionDebugPrintscreen,ActionDebugAI,ActionDebugFunction,ActionDebugClass, ActionsDebugGroupHierarchy
 from models.base import Base 
 from models.department import Department
@@ -43,7 +43,7 @@ class DatabaseManager:
         "ActionDebugGroupHierarchy": ActionsDebugGroupHierarchy,
         
         # Action_suit 相关模型
-        "ActionsSuitList": ActionsSuitList,
+        "ActionSuitList": ActionSuitList,
         "ActionSuitGroup": ActionsSuitGroup,
         "ActionsSuitGroupHierarchy": ActionsSuitGroupHierarchy,
         "ActionSuitMouse": ActionSuitMouse,
