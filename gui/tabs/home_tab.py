@@ -106,7 +106,7 @@ class HomeTab(BaseTab):
         # UI状态变量 - 由UI层管理，反映用户界面当前状态
         # =============================================================================
         
-        # 行为组树形视图选中项的iid,格式如：group_11或A1B2C3D4
+        # 行为组树形视图选中项的iid,格式如：A1B2C3D4
         self.action_group_hierarchy_tree_iid = None
         # show_model_pick中选择的相对位置
         self.relate_location_selected = None
@@ -707,7 +707,7 @@ class HomeTab(BaseTab):
             # 如果treeview中的value的值中group_type的值为group，则表示选中的是组
             if self.action_list.item(iid, "values")[1] == "action_group":
                 # 选中的是ActionGroup
-                self.action_group_id = iid
+                self.action_group_id = self.action_list.item(iid,"values")[2]
                 
                 # 使用ActionGroupManager获取数据
                 data = self.action_group_manager.get_action_group_data("ActionGroup",self.action_group_id )
