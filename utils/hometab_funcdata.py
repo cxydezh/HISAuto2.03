@@ -26,7 +26,7 @@ from utils.screenshot_tool import ScreenshotTool
 from core.pic_capture import PicCapture
 
 class hometab_funcData:
-
+    """该类用于处理home_tab中的行为组和行为元数据，包括保存、删除、排序等操作"""
     # 模型映射字典
     MODEL_MAPPING = {
         # Action 相关模型

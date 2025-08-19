@@ -155,11 +155,21 @@ class home_tab_action_group_func:
                 session = self._get_session()
                 if not session:
                     return False
-                    
-                #判断self.action_tree_selected_iid是来源于Action_list_group表还是来源于ActionsGroupHierarchy表
-                if self.action_tree_selected_iid.startswith("group_"):
+
+                #来源于ActionsGroupHierarchy表
+                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=self.action_group_hierarchy_id).first()
+                if hierarchy:
+                    #更新hierarchy表的记录
+                    hierarchy.group_name = self.group_name
+                    hierarchy.group_note = self.group_desc
+                    hierarchy.doctor_id = self.group_user_id
+                    hierarchy.updated_at = datetime.now()
+                else:
+                    logger.error(f"无法找到行为组层次记录: {self.action_group_hierarchy_id}")
+                    return False
+                if hierarchy.group_type == "ActionGroup":
                     #来源于Action_list_group表
-                    group = session.query(ActionGroup).filter_by(id=self.action_group_id).first()
+                    group = session.query(ActionGroup).filter_by(group_rank_id=hierarchy.id).first()
                     if group:
                         #更新group表的记录
                         group.action_list_group_note = self.group_desc
@@ -173,20 +183,9 @@ class home_tab_action_group_func:
                         logger.error(f"无法找到行为组记录: {self.action_group_id}")
                         return False
                 else:
-                    #来源于ActionsGroupHierarchy表
-                    hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=self.action_group_hierarchy_id).first()
-                    if hierarchy:
-                        #更新hierarchy表的记录
-                        hierarchy.group_name = self.group_name
-                        hierarchy.group_note = self.group_desc
-                        hierarchy.doctor_id = self.group_user_id
-                        hierarchy.updated_at = datetime.now()
-                        session.commit()
-                        logger.info(f"成功更新行为组层次: {self.group_name}")
-                        return True
-                    else:
-                        logger.error(f"无法找到行为组层次记录: {self.action_group_hierarchy_id}")
-                        return False
+                    session.commit()
+                    logger.info(f"成功更新行为组层次: {self.group_name}")
+                    return True
             else:
                 logger.error(f"无效的行为组类型: {self.action_group_type}")
                 return False
