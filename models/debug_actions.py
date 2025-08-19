@@ -198,7 +198,6 @@ class ActionDebugList(BaseModel):
     next_id = Column(Integer)  # 下一步的行为ID
     back_id = Column(Integer)  # 返回ID
     action_note = Column(String(500))  # 行为元备注
-    list_rank_id = Column(Integer,ForeignKey('list_debug_hierarchy.id',ondelete='CASCADE'))
     # 关系
     mouse_actions = relationship("ActionDebugMouse", back_populates="action_list")
     keyboard_actions = relationship("ActionDebugKeyboard", back_populates="action_list")

@@ -19,7 +19,7 @@ from models.action_suit import ActionsSuitGroup, ActionSuitList, ActionsSuitGrou
 from models.debug_actions import ActionsDebugGroup, ActionDebugList, ActionsDebugGroupHierarchy, ActionDebugMouse, ActionDebugKeyboard, ActionDebugCodeTxt, ActionDebugPrintscreen, ActionDebugAI, ActionDebugFunction, ActionDebugClass
 from models.user import User
 from models.department import Department
-from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
+from gui.tabs.Hierarchyutils import get_parent_iid, parse_group_rank, iid_to_group_rank, parse_group_rank_to_iid, parse_list_rank_to_iid
 import globalvariable
 from utils.logger import Logger,logger
 from utils.screenshot_tool import ScreenshotTool
@@ -129,7 +129,6 @@ class hometab_funcData:
             elif sheet_type == "Action_list":
                 cls.sheet_list = "ActionList"
                 cls.sheet_listgroup = "ActionGroup"
-                cls.sheet_hierarchy = "ListGroupHierarchy"
                 cls.sheet_action_mouse = "ActionMouse"
                 cls.sheet_action_keyboard = "ActionKeyboard"
                 cls.sheet_action_codetxt = "ActionCodeTxt"
@@ -151,7 +150,6 @@ class hometab_funcData:
             elif sheet_type == "Action_suit_list":
                 cls.sheet_list = "ActionSuitList"
                 cls.sheet_listgroup = "ActionSuitGroup"
-                cls.sheet_hierarchy = "ListSuitHierarchy"
                 cls.sheet_action_mouse = "ActionSuitMouse"
                 cls.sheet_action_keyboard = "ActionSuitKeyboard"
                 cls.sheet_action_codetxt = "ActionSuitCodeTxt"
@@ -173,7 +171,6 @@ class hometab_funcData:
             elif sheet_type == "debug_action_list":
                 cls.sheet_list = "ActionDebugList"
                 cls.sheet_listgroup = "ActionDebugGroup"
-                cls.sheet_hierarchy = "ListDebugHierarchy"
                 cls.sheet_action_mouse = "ActionDebugMouse"
                 cls.sheet_action_keyboard = "ActionDebugKeyboard"
                 cls.sheet_action_codetxt = "ActionDebugCodeTxt"
@@ -576,7 +573,7 @@ class hometab_funcData:
             print(traceback.format_exc())
             return False
     @classmethod
-    def _load_action_group_data(cls, workTreeview, treeDatatxt):
+    def _load_action_group_data(cls, workTreeview, treeDatatxt,group_id=None):
         """
         根据要求为接受的Treeview类型的参数进行树结构的数据填充
         
@@ -599,7 +596,12 @@ class hometab_funcData:
             # 根据treeDatatxt确定要使用的模型和字段
             if treeDatatxt in ["ActionList", "ActionSuitList", "ActionDebugList"]:
                 # 使用list_rank字段进行分组，action_sort_num字段进行排序
-                cls._load_list_data(workTreeview, treeDatatxt, session)
+                if group_id==None:
+                    logger.error("group_id为空")
+                    return False
+                else:
+                    my_group_id = group_id
+                cls._load_list_data(workTreeview, treeDatatxt, session,my_group_id)
             elif treeDatatxt in ["ActionsGroupHierarchy", "ActionsSuitGroupHierarchy", "ActionsDebugGroupHierarchy"]:
                 # 使用group_rank字段进行分组，sort_num字段进行排序
                 cls._load_hierarchy_data(workTreeview, treeDatatxt, session)
@@ -618,7 +620,7 @@ class hometab_funcData:
                 session.close()
     
     @classmethod
-    def _load_list_data(cls, workTreeview, treeDatatxt, session):
+    def _load_list_data(cls, workTreeview, treeDatatxt, session, group_id=None):
         """加载ActionList、ActionSuitList、ActionDebugList类型的数据"""
         try:
             # 根据treeDatatxt确定模型
@@ -631,8 +633,11 @@ class hometab_funcData:
             else:
                 return
             
-            # 获取所有数据，按list_rank分组，按action_sort_num排序
-            all_records = session.query(model).all()
+            # 获取数据，如果提供了group_id则按group_id过滤
+            if group_id:
+                all_records = session.query(model).filter_by(group_id=group_id).all()
+            else:
+                all_records = session.query(model).all()
             
             # 按list_rank分组
             grouped_data = {}
@@ -677,9 +682,8 @@ class hometab_funcData:
             grouped_data = {}
             for record in all_records:
                 if record.group_rank:
-                    rank_dict = parse_group_rank(record.group_rank)
+                    group_key = parse_group_rank_to_iid(record.group_rank)
                     # 创建分组键
-                    group_key = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
                     if group_key not in grouped_data:
                         grouped_data[group_key] = []
                     grouped_data[group_key].append(record)
@@ -705,78 +709,56 @@ class hometab_funcData:
             # 记录已插入的节点，避免重复
             inserted_nodes = set()
             
+            # 第一遍：插入所有父节点
             for group_key in sorted_keys:
                 records = grouped_data[group_key]
                 
                 for record in records:
                     # 确定节点的iid
                     if data_type == "list":
-                        iid = cls._parse_list_rank_to_iid(record.list_rank)
+                        iid = parse_list_rank_to_iid(record.list_rank)
                     else:  # hierarchy
-                        iid = cls._parse_group_rank_to_iid(record.group_rank)
+                        iid = parse_group_rank_to_iid(record.group_rank)
                     
                     if not iid or iid in inserted_nodes:
                         continue
                     
                     # 确定父节点iid
-                    parent_iid = cls._get_parent_iid(iid)
+                    parent_iid = get_parent_iid(iid)
+                    
+                    # 如果父节点不存在，先创建父节点
+                    if parent_iid and not workTreeview.exists(parent_iid):
+                        try:
+                            # 创建父节点占位符
+                            workTreeview.insert("", "end", iid=parent_iid, text="📁", values=("", "", ""))
+                            inserted_nodes.add(parent_iid)
+                        except Exception as e:
+                            logger.warning(f"无法创建父节点 {parent_iid}: {e}")
+                            continue
                     
                     # 确定节点文本和图标
                     if data_type == "list":
                         text_name = "📁" if record.action_type == "group" else "📄"
-                        values = (record.action_name or "", record.action_note or "", record.id)
+                        values = (record.action_name or "",record.action_type, record.action_note or "", record.id)
                     else:  # hierarchy
-                        text_name = "📁" if hasattr(record, 'group_type') and record.group_type == "group" else "📄"
-                        values = (record.group_name or "", getattr(record, 'group_note', "") or "", record.id)
+                        text_name = "📁" if hasattr(record, 'group_type') and record.group_type == "hierarchy" else "📄"
+                        values = (record.group_name or "", record.group_type, getattr(record, 'group_note', "") or "", record.id)
                     
                     # 插入节点
-                    if parent_iid and workTreeview.exists(parent_iid):
-                        workTreeview.insert(parent_iid, "end", iid=iid, text=text_name, values=values)
-                    elif not parent_iid:
-                        workTreeview.insert("", "end", iid=iid, text=text_name, values=values)
-                    
-                    inserted_nodes.add(iid)
+                    try:
+                        if parent_iid and workTreeview.exists(parent_iid):
+                            workTreeview.insert(parent_iid, "end", iid=iid, text=text_name, values=values)
+                        elif not parent_iid:
+                            workTreeview.insert("", "end", iid=iid, text=text_name, values=values)
+                        
+                        inserted_nodes.add(iid)
+                    except Exception as e:
+                        logger.warning(f"无法插入节点 {iid}: {e}")
+                        continue
                     
         except Exception as e:
             logger.error(f"构建树形结构失败: {str(e)}")
-            print(traceback.format_exc())
-    
-    @classmethod
-    def _parse_list_rank_to_iid(cls, list_rank):
-        """将list_rank转换为iid格式"""
-        if not list_rank:
-            return None
-        rank_dict = parse_group_rank(list_rank)
-        return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
-    
-    @classmethod
-    def _parse_group_rank_to_iid(cls, group_rank):
-        """将group_rank转换为iid格式"""
-        if not group_rank:
-            return None
-        rank_dict = parse_group_rank(group_rank)
-        return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
-    
-    @classmethod
-    def _get_parent_iid(cls, iid):
-        """根据当前iid获取父节点iid"""
-        if not iid:
-            return None
-        
-        rank_dict = parse_group_rank(iid)
-        
-        # 根据层级确定父节点
-        if rank_dict['E'] > 0:
-            return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}"
-        elif rank_dict['D'] > 0:
-            return f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}"
-        elif rank_dict['C'] > 0:
-            return f"A{rank_dict['A']}B{rank_dict['B']}"
-        elif rank_dict['B'] > 0:
-            return f"A{rank_dict['A']}"
-        else:
-            return None  # A级节点没有父节点
-    
+            print(traceback.format_exc())    
     @classmethod
     def _get_sort_key(cls, group_key):
         """获取用于排序的键值"""

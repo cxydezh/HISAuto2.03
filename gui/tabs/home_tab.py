@@ -16,7 +16,7 @@ import functools
 import time
 
 from models.user import User
-from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy, ListGroupHierarchy
+from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy
 from utils.hometab_funcdata import hometab_funcData
 from utils.screenshot_tool import ScreenshotTool
 from utils.home_tab_func import home_tab_action_group_func, ActionManager, ActionGroupManager
@@ -684,6 +684,11 @@ class HomeTab(BaseTab):
         )
         if file_path:
             self.excel_path_var.set(file_path)
+    @prevent_double_click(interval=1.0)
+    def _refresh_action_group(self):
+        """刷新行为组树，按GroupRank分层显示"""
+        hometab_funcData._load_action_group_data(self.action_tree,'ActionsGroupHierarchy')
+        return
     def _on_action_tree_select(self, event=None):
         """行为组树选择事件处理"""
         selected = self.action_tree.selection()
@@ -703,11 +708,17 @@ class HomeTab(BaseTab):
         self.group_user_name_entry.config(state='disabled')
         self.department_id_entry.config(state='disabled')
         
+        # 获取节点的值，如果节点不存在则返回
         try:
+            item_values = self.action_tree.item(iid, "values")
+            if not item_values or len(item_values) < 3:
+                print(f"Warning: Item {iid} has invalid values: {item_values}")
+                return
+            
             # 如果treeview中的value的值中group_type的值为group，则表示选中的是组
-            if self.action_list.item(iid, "values")[1] == "action_group":
+            if item_values[1] == "group":
                 # 选中的是ActionGroup
-                self.action_group_id = self.action_list.item(iid,"values")[2]
+                self.action_group_id = item_values[3]
                 
                 # 使用ActionGroupManager获取数据
                 data = self.action_group_manager.get_action_group_data("ActionGroup",self.action_group_id )
@@ -720,7 +731,7 @@ class HomeTab(BaseTab):
                     self.action_group_hierarchy_id = group.group_rank_id
                     
                     # 填充详情区
-                    self.group_name_var.set(self.action_list.item(iid, "values")[0] or "")
+                    self.group_name_var.set(item_values[0] or "")
                     self.group_last_circle_local_var.set(group.last_circle_local or "")
                     self.group_last_circle_node_var.set(group.last_circle_node or "")
                     self.group_setup_time_var.set(str(group.created_at or ""))
@@ -736,7 +747,7 @@ class HomeTab(BaseTab):
                     self.action_list.delete(*self.action_list.get_children())
                     # 先把list_hierarchy填充到action_list_tree
                     # 调用hometab_funcData._load_action_group_data方法，填充action_list_tree
-                    hometab_funcData._load_action_group_data('Action',self.action_list)
+                    hometab_funcData._load_action_group_data(self.action_list,'ActionList',self.action_group_id)
                     
                     self.hierarchy_sort = group.sort_num if group else None
                     selected_group_rank = hierarchy.group_rank if hierarchy else None
@@ -803,11 +814,6 @@ class HomeTab(BaseTab):
         else:
             self.btn_run_action_group.config(state='disabled')
     @prevent_double_click(interval=1.0)
-    def _refresh_action_group(self):
-        """刷新行为组树，按GroupRank分层显示"""
-        hometab_funcData._load_action_group_data('Action',self.action_tree)
-        return
-    @prevent_double_click(interval=1.0)
     def _new_action_group_group(self):
         """新建行为组组"""
         #先判断是否有Hierarchy tree是否有被选中的项目
@@ -822,7 +828,7 @@ class HomeTab(BaseTab):
             return
         from utils.actionGroupHierarchyManager import ActionGroupHierarchy_Manager
         #调用ActionGroupHierarchy_Manager方法，新建行为组组套
-        ActionGroupHierarchy_Manager(self.my_window, "ActionsGroupHierarchy", self.action_group_selected_rank, self.relate_location_selected, self.hierarchy_sort,is_action_list=True)
+        ActionGroupHierarchy_Manager(self.my_window, "ActionsGroupHierarchy", self.action_group_selected_rank, self.relate_location_selected, self.hierarchy_sort,is_action_list=False)
 
         #刷新行为组树
         self._refresh_action_group()

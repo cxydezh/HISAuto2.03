@@ -98,7 +98,7 @@ class SuitViewFunc:
     
     def load_suit_tree(self):
         """加载组套树形数据 - 参考home_tab.py中的_refresh_action_group方法"""
-        hometab_funcData._load_action_group_data('Action_suit',self.suit_view.suit_tree)
+        hometab_funcData._load_action_group_data(self.suit_view.suit_tree,'ActionsSuitGroupHierarchy')
         return
     
     def load_action_list(self, suit_id=None):

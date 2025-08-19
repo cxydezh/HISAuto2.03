@@ -3,9 +3,9 @@ from tkinter import ttk
 import traceback
 from config.config_manager import ConfigManager
 from gui.tabs.Hierarchyutils import iid_to_group_rank, parse_group_rank
-from models.action_suit import ActionSuitList, ActionsSuitGroupHierarchy, ListSuitHierarchy
-from models.actions import ActionList, ActionsGroupHierarchy, ListGroupHierarchy
-from models.debug_actions import ActionDebugList, ActionsDebugGroupHierarchy, ListDebugHierarchy
+from models.action_suit import ActionSuitList, ActionsSuitGroupHierarchy
+from models.actions import ActionList, ActionsGroupHierarchy
+from models.debug_actions import ActionDebugList, ActionsDebugGroupHierarchy
 #获取全局变量
 import globalvariable
 #获取数据库
@@ -543,6 +543,7 @@ class ActionGroupHierarchy_Manager:
                 new_action_group_hierarchy = ActionsGroupHierarchy(
                 group_name=self.group_name,
                 group_rank=self.group_rank,
+                group_type="hierarchy",
                 sort_num=self.sort_num,
                 doctor_id=self.doctor_id,
                 department_id=self.department_id,

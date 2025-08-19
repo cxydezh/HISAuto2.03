@@ -107,13 +107,13 @@ class PatientAIResult(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     record_id = Column(String(50), ForeignKey('patient_list.id'), nullable=False)  # 记录ID
     patient_id = Column(String(50), ForeignKey('patient_list.patient_id'), nullable=False)  # 患者ID
-    func_list_id = Column(String(50), ForeignKey('list_group_hierarchy.id'), nullable=False)  # 功能列表ID
+    func_list_id = Column(String(50), ForeignKey('action_list.id'), nullable=False)  # 功能列表ID
     ai_result = Column(String(15000))  # AI结果
 
     # 关系
     record = relationship("PatientList", foreign_keys=[record_id])
     patient = relationship("PatientList", foreign_keys=[patient_id])
-    func_list = relationship("ListGroupHierarchy", foreign_keys=[func_list_id])
+    func_list = relationship("ActionList", foreign_keys=[func_list_id])
 
 class PatientAIResultBackup(BaseModel):
     """患者AI结果备份"""
@@ -123,10 +123,10 @@ class PatientAIResultBackup(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)  # 主键ID
     record_id = Column(String(50), ForeignKey('patient_list.id'), nullable=False)  # 记录ID
     patient_id = Column(String(50), ForeignKey('patient_list.patient_id'), nullable=False)  # 患者ID
-    func_list_id = Column(String(50), ForeignKey('list_group_hierarchy.id'), nullable=False)  # 功能列表ID
+    func_list_id = Column(String(50), ForeignKey('action_list.id'), nullable=False)  # 功能列表ID
     ai_result = Column(String(15000))  # AI结果备份
 
     # 关系
     record = relationship("PatientList", foreign_keys=[record_id])
     patient = relationship("PatientList", foreign_keys=[patient_id])
-    func_list = relationship("ListGroupHierarchy", foreign_keys=[func_list_id])
+    func_list = relationship("ActionList", foreign_keys=[func_list_id])

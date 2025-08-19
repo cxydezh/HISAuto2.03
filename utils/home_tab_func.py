@@ -16,7 +16,7 @@ import win32api  # type: ignore
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
 from models.action_suit import ActionsSuitGroup, ActionsSuitGroupHierarchy
-from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt, ListGroupHierarchy
+from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt
 from models.debug_actions import ActionsDebugGroup, ActionsDebugGroupHierarchy
 from models.user import User
 from models.department import Department
@@ -565,7 +565,7 @@ class ActionManager:
             if self.home_tab.action_operation_type == 1:
                 # 新增保存,不涉及保存列表层级，因为列表层级保存在ActionManager中已经被实现
                 action_list = ActionList(
-                    list_rank_id=self.home_tab.current_action_list_hierarchy_id,
+                    list_rank=self.home_tab.current_action_list_selected_rank,
                     group_id=self.home_tab.action_group_id,
                     action_type=self.home_tab.action_type_var.get(),
                     action_name=self.home_tab.action_name_var.get().strip(),
@@ -588,7 +588,7 @@ class ActionManager:
                 # 修改保存
                 if not self.home_tab.current_action_id and self.home_tab.current_action_list_hierarchy_id:
                     # 修改列表层级
-                    list_hierarchy = session.query(ListGroupHierarchy).filter_by(id=self.home_tab.current_action_list_hierarchy_id).first()
+                    list_hierarchy = session.query(ActionList).filter_by(id=self.home_tab.current_action_list_hierarchy_id).first()
                     if list_hierarchy:
                         list_hierarchy.list_name = self.home_tab.action_name_var.get().strip()
                         list_hierarchy.group_note = self.home_tab.action_note_var.get().strip()
@@ -853,7 +853,7 @@ class ActionManager:
         session = self._get_session()
         if not session:
             return
-        hierarchy = session.query(ListGroupHierarchy).filter_by(id=hierarchy_id).first()
+        hierarchy = session.query(ActionList).filter_by(id=hierarchy_id).first()
         if hierarchy:
             return hierarchy.list_rank
         else:
@@ -874,7 +874,7 @@ class ActionManager:
                 
             # 根据行为类型获取对应的数据
             if action_type == "list_hierarchy":
-                action_data = session.query(ListGroupHierarchy).filter_by(id =current_action_list_hierarchy_id).first()
+                action_data = session.query(ActionList).filter_by(id =current_action_list_hierarchy_id).first()
             elif action_type == "mouse":
                 action_data = session.query(ActionMouse).filter_by(action_list_id =action_id).first()
             elif action_type == "keyboard":
@@ -1395,21 +1395,30 @@ class ActionGroupManager:
                 # 获取行为组
                 group = session.query(ActionGroup).filter_by(id=group_id).first()
                 # 获取关联的层级信息
-                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                if group:
+                    hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                else:
+                    hierarchy = None
                 # 获取行为列表
                 actions = session.query(ActionList).filter_by(group_id=group_id).all()
             elif sheet_name == "ActionsDebugGroup":
                 # 获取行为组
                 group = session.query(ActionGroup).filter_by(id=group_id).first()
                 # 获取关联的层级信息
-                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                if group:
+                    hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                else:
+                    hierarchy = None
                 # 获取行为列表
                 actions = session.query(ActionList).filter_by(group_id=group_id).all()
             elif sheet_name == "ActionsSuitGroup":
                 # 获取行为组
                 group = session.query(ActionsSuitGroup).filter_by(id=group_id).first()
                 # 获取关联的层级信息
-                hierarchy = session.query(ActionsSuitGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                if group:
+                    hierarchy = session.query(ActionsSuitGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                else:
+                    hierarchy = None
                 # 获取行为列表
                 actions = session.query(ActionList).filter_by(group_id=group_id).all()
             if not group:
@@ -1452,7 +1461,7 @@ class ActionGroupManager:
             return None
             
         try:
-            hierarchy = session.query(ListGroupHierarchy).filter_by(list_rank=hierarchy_rank,group_id=group_id).first()
+            hierarchy = session.query(ActionList).filter_by(list_rank=hierarchy_rank,group_id=group_id).first()
             return hierarchy
         except Exception as e:
             print(f"Error getting hierarchy data: {e}")

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import random
 import globalvariable
 from models.patient import PatientList, PatientAIResult, PatientAIResultBackup
-from models.actions import ActionList, ActionGroup, ActionsGroupHierarchy, ActionMouse, ActionKeyboard, ActionCodeTxt, ActionPrintscreen, ActionAI, ActionFunction, ActionClass, ListGroupHierarchy
+from models.actions import ActionList, ActionGroup, ActionsGroupHierarchy, ActionMouse, ActionKeyboard, ActionCodeTxt, ActionPrintscreen, ActionAI, ActionFunction, ActionClass
 from database.db_manager import DatabaseManager
 
 # 科室数据
@@ -82,7 +82,7 @@ def get_ai_functions():
 def get_ai_workflow1(action_group_id):
     """获取指定AI功能的工作流程，也就是获取与action_list表中id对应的list_group_hierarchy表中相关的数据"""
     session = DatabaseManager.get_session()
-    list_group_hierarchy = session.query(ListGroupHierarchy).filter(ListGroupHierarchy.group_id == action_group_id and ListGroupHierarchy.list_rank.contains("B0")).all()
+    list_group_hierarchy = session.query(ActionList).filter(ActionList.group_id == action_group_id and ActionList.list_rank.contains("B0")).all()
     session.close()
     list_group_hierarchy_json = []
     for list_group_hierarchy in list_group_hierarchy:
