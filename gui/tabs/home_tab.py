@@ -684,6 +684,11 @@ class HomeTab(BaseTab):
         )
         if file_path:
             self.excel_path_var.set(file_path)
+    @prevent_double_click(interval=1.0)
+    def _refresh_action_group(self):
+        """刷新行为组树，按GroupRank分层显示"""
+        hometab_funcData._load_action_group_data('Action',self.action_tree)
+        return
     def _on_action_tree_select(self, event=None):
         """行为组树选择事件处理"""
         selected = self.action_tree.selection()
@@ -802,11 +807,6 @@ class HomeTab(BaseTab):
             self.btn_run_action_group.config(state='normal')
         else:
             self.btn_run_action_group.config(state='disabled')
-    @prevent_double_click(interval=1.0)
-    def _refresh_action_group(self):
-        """刷新行为组树，按GroupRank分层显示"""
-        hometab_funcData._load_action_group_data('Action',self.action_tree)
-        return
     @prevent_double_click(interval=1.0)
     def _new_action_group_group(self):
         """新建行为组组"""
