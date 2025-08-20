@@ -687,11 +687,7 @@ class hometab_funcData:
                     if group_key not in grouped_data:
                         grouped_data[group_key] = []
                     grouped_data[group_key].append(record)
-            
-            # 对每个分组内的数据按sort_num排序
-            for group_key in grouped_data:
-                grouped_data[group_key].sort(key=lambda x: x.sort_num or 0)
-            
+                        
             # 构建树形结构
             cls._build_tree_from_grouped_data(workTreeview, grouped_data, "hierarchy")
             
@@ -703,8 +699,101 @@ class hometab_funcData:
     def _build_tree_from_grouped_data(cls, workTreeview, grouped_data, data_type):
         """根据分组数据构建树形结构"""
         try:
-            # 按分组键排序，确保树的层级结构正确
             sorted_keys = sorted(grouped_data.keys(), key=lambda x: cls._get_sort_key(x))
+            # 根据group_data数据的group_rank的值构建一个树结构的list列表
+            # 首先获取每一个数据的parent_iid
+            tree_dict = {}
+            for group_key in sorted_keys:
+                # 根据用户权限过滤数据
+                if globalvariable.USER_IS_SUPER_ADMIN:
+                    tree_dict[group_key] = {
+                        'obj': grouped_data[group_key],
+                        'iid': None,
+                        'children': [],
+                        'parent': None
+                    }
+                else:
+                    rank_dict = parse_group_rank(group_key)
+                    # 普通用户只能看到全局(A=2)或自己科室的层级
+                    if rank_dict['A'] == 2 or grouped_data[group_key].department_id == globalvariable.USER_DEPARTMENT_ID:
+                        tree_dict[group_key] = {
+                            'obj': grouped_data[group_key],
+                            'iid': None,
+                            'children': [],
+                            'parent': None
+                        }
+                # 建立父子关系
+                for key, node in tree_dict.items():
+                    rank = parse_group_rank(key)
+                    
+                    # 确定父节点key和当前节点iid
+                    if rank['E'] > 0:
+                        parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E0"
+                        parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+                        node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E{rank['E']}"
+                    elif rank['D'] > 0:
+                        parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D0E0"
+                        parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+                        node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+                    elif rank['C'] > 0:
+                        parent_key = f"A{rank['A']}B{rank['B']}C0D0E0"
+                        parent_iid = f"A{rank['A']}B{rank['B']}"
+                        node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+                    elif rank['B'] > 0:
+                        parent_key = f"A{rank['A']}B0C0D0E0"
+                        parent_iid = f"A{rank['A']}"
+                        node['iid'] = f"A{rank['A']}B{rank['B']}"
+                    else:
+                        parent_key = None
+                        parent_iid = None
+                        node['iid'] = f"A{rank['A']}"
+                    
+                    # 设置父子关系
+                    if parent_key and parent_key in tree_dict:
+                        node['parent'] = parent_iid
+                        tree_dict[parent_key]['children'].append(key)
+                    else:
+                        node['parent'] = None
+                # 递归插入节点到Treeview
+                def insert_node(key, parent_iid):
+                    if key not in tree_dict:
+                        return
+                        
+                    node = tree_dict[key]
+                    h = node['obj']
+                    session = cls._get_session()
+                    if not session:
+                        return
+                    user = session.query(User).filter_by(user_id=h.doctor_id).first()
+                    username = user.username if user else "未知"
+
+                    if data_type == "list":
+                        text_name = "📁" if record.action_type == "hierarchy" else "📄"
+                        values = (record.action_name or "",record.action_type, record.action_note or "", record.id)
+                    else:  # hierarchy
+                        text_name = "📁" if hasattr(record, 'group_type') and record.group_type == "hierarchy" else "📄"
+                        values = (record.group_name or "", record.group_type, getattr(record, 'group_note', "") or "", record.id)
+                    
+                    # 插入节点
+                    try:
+                        if parent_iid and workTreeview.exists(parent_iid):
+                            workTreeview.insert(parent_iid, "end", iid=iid, text=text_name, values=values)
+                        elif not parent_iid:
+                            workTreeview.insert("", "end", iid=iid, text=text_name, values=values)
+                        
+                        inserted_nodes.add(iid)
+                    except Exception as e:
+                        logger.warning(f"无法插入节点 {iid}: {e}")
+                        continue
+                    
+                    # 递归插入子节点
+                    for child_key in node['children']:
+                        insert_node(child_key, node['iid'])
+                tree_item = []
+                for record in records:
+                    parent_iid = get_parent_iid(record.group_rank)
+                    print(parent_iid)
+            # 按分组键排序，确保树的层级结构正确
             
             # 记录已插入的节点，避免重复
             inserted_nodes = set()
@@ -726,19 +815,10 @@ class hometab_funcData:
                     # 确定父节点iid
                     parent_iid = get_parent_iid(iid)
                     
-                    # 如果父节点不存在，先创建父节点
-                    if parent_iid and not workTreeview.exists(parent_iid):
-                        try:
-                            # 创建父节点占位符
-                            workTreeview.insert("", "end", iid=parent_iid, text="📁", values=("", "", ""))
-                            inserted_nodes.add(parent_iid)
-                        except Exception as e:
-                            logger.warning(f"无法创建父节点 {parent_iid}: {e}")
-                            continue
                     
                     # 确定节点文本和图标
                     if data_type == "list":
-                        text_name = "📁" if record.action_type == "group" else "📄"
+                        text_name = "📁" if record.action_type == "hierarchy" else "📄"
                         values = (record.action_name or "",record.action_type, record.action_note or "", record.id)
                     else:  # hierarchy
                         text_name = "📁" if hasattr(record, 'group_type') and record.group_type == "hierarchy" else "📄"
