@@ -712,20 +712,29 @@ class hometab_funcData:
         def insert_node(key, parent_iid = None):
             if key not in tree_dict:
                 return
+            # 检查数据类型
+            if isinstance(tree_dict[key]['obj'], list):
+                # 如果是列表，取第一个元素
+                obj = tree_dict[key]['obj'][0] if tree_dict[key]['obj'] else None
+            else:
+                obj = tree_dict[key]['obj']
+            
+            if not obj:
+                return
             # 确定节点的iid
             if data_type == "list":
-                iid = parse_list_rank_to_iid(tree_dict[key]['obj'].list_rank)
+                iid = parse_list_rank_to_iid(obj.list_rank)
             else:  # hierarchy
-                iid = parse_group_rank_to_iid(tree_dict[key]['obj'].group_rank)
+                iid = parse_group_rank_to_iid(obj.group_rank)
     
             node = tree_dict[key]
             h = node['obj']
             if data_type == "list":
-                text_name = "📁" if tree_dict[key]['obj'].action_type == "hierarchy" else "📄"
-                values = (tree_dict[key]['obj'].action_name or "",tree_dict[key]['obj'].action_type, tree_dict[key]['obj'].action_note or "", tree_dict[key]['obj'].id)
+                text_name = "📁" if obj.action_type == "hierarchy" else "📄"
+                values = (obj.action_name or "",obj.action_type, obj.action_note or "", obj.id)
             else:  # hierarchy
-                text_name = "📁" if hasattr(tree_dict[key]['obj'], 'group_type') and tree_dict[key]['obj'].group_type == "hierarchy" else "📄"
-                values = (tree_dict[key]['obj'].group_name or "", tree_dict[key]['obj'].group_type, getattr(tree_dict[key]['obj'], 'group_note', "") or "", tree_dict[key]['obj'].id)
+                text_name = "📁" if hasattr(obj, 'group_type') and obj.group_type == "hierarchy" else "📄"
+                values = (obj.group_name or "", obj.group_type, getattr(obj, 'group_note', "") or "", obj.id)
                     
             # 插入节点
             try:
