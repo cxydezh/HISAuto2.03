@@ -174,17 +174,17 @@ class DatabaseManager:
         # 先检测action_group_hierarchy、action_suit_group_hierarchy、action_debug_group_hierarchy表是否存在记录
         if session.query(ActionsGroupHierarchy).count() == 0:
             # 添加3条记录
-            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('个人', 'A1B0C0D0E0','hierarchy', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
-            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('科室', 'A2B0C0D0E0','hierarchy', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
-            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('全局', 'A3B0C0D0E0','hierarchy', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('个人', 'A1B0C0D0E0','hierarchy_group', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('科室', 'A2B0C0D0E0','hierarchy_group', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('全局', 'A3B0C0D0E0','hierarchy_group', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
         if session.query(ActionsSuitGroupHierarchy).count() == 0:
-            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('个人', 'A1B0C0D0E0','hierarchy', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
-            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('科室', 'A2B0C0D0E0','hierarchy', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
-            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('全局', 'A3B0C0D0E0','hierarchy', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('个人', 'A1B0C0D0E0','hierarchy_group', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('科室', 'A2B0C0D0E0','hierarchy_group', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_suit_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('全局', 'A3B0C0D0E0','hierarchy_group', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
         if session.query(ActionsDebugGroupHierarchy).count() == 0:
-            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('个人', 'A1B0C0D0E0','hierarchy', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
-            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('科室', 'A2B0C0D0E0','hierarchy', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
-            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('全局', 'A3B0C0D0E0','hierarchy', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('个人', 'A1B0C0D0E0','hierarchy_group', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('科室', 'A2B0C0D0E0','hierarchy_group', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
+            session.execute(text("INSERT INTO actions_debug_group_hierarchy (group_name, group_rank,group_type, sort_num, updated_at, created_at) VALUES ('全局', 'A3B0C0D0E0','hierarchy_group', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
         session.commit()
     @classmethod
     def _get_model_class(cls, sheet_name):

@@ -107,8 +107,9 @@ class hometab_funcData:
             print(traceback.format_exc())
             return None
     @classmethod
-    def delete_action_group(cls,sheet_type,action_tree_selected_iid,action_group_id,action_group_hierarchy_id):
+    def delete_action_group(cls,sheet_type,action_tree_selected_iid,action_group_id,action_group_hierarchy_id,node_type):
         """该类函数用于根据sheet_type删除行为组,其中sheet_type:行为组表类型（如Action,Action_suit,debug_action）,action_tree_selected_iid:获取的树节点的iid,action_group_id:行为组id,action_group_hierarchy_id:行为组层次id"""
+        cls.node_type = node_type
         session = None
         try:
             #获取数据库会话
@@ -199,7 +200,14 @@ class hometab_funcData:
                 return False
 
             #如果选中的是来源于Action_list_group表
-            if action_tree_selected_iid.startswith("group_"):
+            if cls.node_type == "group":
+                # 删除action_group_hierarchy表的记录
+                hierarchy = session.query(hierarchy_model).filter_by(id=action_group_hierarchy_id).first()
+                if hierarchy:
+                    session.delete(hierarchy)
+                    session.commit()
+                    logger.info(f"成功删除行为组层次: {hierarchy.group_name}")
+
                 #删除action_list_group表的记录
                 group = session.query(listgroup_model).filter_by(id=action_group_id).first()
                 if group:
@@ -220,7 +228,7 @@ class hometab_funcData:
                 else:
                     logger.error(f"无法找到行为组记录: {action_group_id}")
                     return False
-            elif action_tree_selected_iid.startswith("action_"):
+            elif cls.node_type == "list":
                 #删除action_list表的记录
                 action = session.query(list_model).filter_by(id=action_group_id).first()
                 if action:
@@ -245,7 +253,7 @@ class hometab_funcData:
                     else:
                         logger.error(f"无法找到行为元记录: {action_group_id}")
                         return False
-            elif action_tree_selected_iid.startswith("hierarchy_"):
+            elif cls.node_type == "hierarchy_list":
                 #删除list_group_hierarchy表的记录
                 # 通过递归删除list_group_hierarchy表中相关的记录和子记录，同时删除相对应的ActionGroup表中的记录
                 # 查询当前层次
@@ -295,7 +303,7 @@ class hometab_funcData:
                         continue
                     cls.delete_action_group(sheet_type, child_hierarchy_iid, child_hierarchy_group.id, child_hierarchy_group.id)
                 return True
-            elif action_tree_selected_iid.startswith("A"):
+            elif cls.node_type == "hierarchy_group":
                 # 通过递归删除ActionsGroupHierarchy表中相关的记录和子记录，同时删除相对应的ActionGroup表中的记录
                 # 查询当前层次
                 hierarchy = session.query(hierarchy_model).filter_by(id=action_group_hierarchy_id).first()
@@ -573,7 +581,7 @@ class hometab_funcData:
             print(traceback.format_exc())
             return False
     @classmethod
-    def _load_action_group_data(cls, workTreeview, treeDatatxt,group_id=None):
+    def _load_action_group_data(cls, workTreeview, treeDatatxt,action_group_id=None):
         """
         根据要求为接受的Treeview类型的参数进行树结构的数据填充
         
@@ -596,11 +604,12 @@ class hometab_funcData:
             # 根据treeDatatxt确定要使用的模型和字段
             if treeDatatxt in ["ActionList", "ActionSuitList", "ActionDebugList"]:
                 # 使用list_rank字段进行分组，action_sort_num字段进行排序
-                if group_id==None:
-                    logger.error("group_id为空")
+                if action_group_id==None:
+                    logger.error("action_group_hierarchy_id为空")
                     return False
                 else:
-                    my_group_id = group_id
+                    #获取action_group_hierarchy_id的group_id
+                    my_group_id = action_group_id
                 cls._load_list_data(workTreeview, treeDatatxt, session,my_group_id)
             elif treeDatatxt in ["ActionsGroupHierarchy", "ActionsSuitGroupHierarchy", "ActionsDebugGroupHierarchy"]:
                 # 使用group_rank字段进行分组，sort_num字段进行排序
@@ -643,16 +652,14 @@ class hometab_funcData:
             grouped_data = {}
             for record in all_records:
                 if record.list_rank:
-                    rank_dict = parse_group_rank(record.list_rank)
-                    # 创建分组键
-                    group_key = f"A{rank_dict['A']}B{rank_dict['B']}C{rank_dict['C']}D{rank_dict['D']}E{rank_dict['E']}"
+                    group_key = parse_list_rank_to_iid(record.list_rank)
                     if group_key not in grouped_data:
                         grouped_data[group_key] = []
                     grouped_data[group_key].append(record)
             
             # 对每个分组内的数据按action_sort_num排序
             for group_key in grouped_data:
-                grouped_data[group_key].sort(key=lambda x: x.action_sort_num or 0)
+                grouped_data[group_key].sort(key=lambda x: x.sort_num or 0)
             
             # 构建树形结构
             cls._build_tree_from_grouped_data(workTreeview, grouped_data, "list")
@@ -674,7 +681,6 @@ class hometab_funcData:
                 model = ActionsDebugGroupHierarchy
             else:
                 return
-            
             # 获取所有数据
             all_records = session.query(model).all()
             
@@ -696,7 +702,7 @@ class hometab_funcData:
                             grouped_data[group_key] = []
                         grouped_data[group_key].append(record)
             # 构建树形结构
-            cls._build_tree_from_grouped_data(workTreeview, grouped_data, "hierarchy")
+            cls._build_tree_from_grouped_data(workTreeview, grouped_data, "group")
             
         except Exception as e:
             logger.error(f"加载层级数据失败: {str(e)}")
@@ -705,6 +711,13 @@ class hometab_funcData:
     @classmethod
     def _build_tree_from_grouped_data(cls, workTreeview, grouped_data, data_type):
         """根据分组数据构建树形结构"""
+        """嵌套字典的结构为：
+        {
+            "A1B1C1D1E1": {
+                "obj": [obj1, obj2, ...],
+                "iid": "A1B1C1D1E1",
+                "children": ["A1B1C1D1E2", "A1B1C1D1E3"],
+        """
         tree_dict = {}
         # 记录已插入的节点，避免重复
         inserted_nodes = set()
@@ -716,24 +729,21 @@ class hometab_funcData:
             if isinstance(tree_dict[key]['obj'], list):
                 # 如果是列表，取第一个元素
                 obj = tree_dict[key]['obj'][0] if tree_dict[key]['obj'] else None
+                iid = tree_dict[key]['iid']
             else:
                 obj = tree_dict[key]['obj']
-            
+                iid = tree_dict[key]['iid']
             if not obj:
                 return
             # 确定节点的iid
-            if data_type == "list":
-                iid = parse_list_rank_to_iid(obj.list_rank)
-            else:  # hierarchy
-                iid = parse_group_rank_to_iid(obj.group_rank)
     
             node = tree_dict[key]
             h = node['obj']
             if data_type == "list":
-                text_name = "📁" if obj.action_type == "hierarchy" else "📄"
+                text_name = "📁" if obj.action_type == "hierarchy_list" else "📄"
                 values = (obj.action_name or "",obj.action_type, obj.action_note or "", obj.id)
             else:  # hierarchy
-                text_name = "📁" if hasattr(obj, 'group_type') and obj.group_type == "hierarchy" else "📄"
+                text_name = "📁" if hasattr(obj, 'group_type') and obj.group_type == "hierarchy_group" else "📄"
                 values = (obj.group_name or "", obj.group_type, getattr(obj, 'group_note', "") or "", obj.id)
                     
             # 插入节点
@@ -745,59 +755,60 @@ class hometab_funcData:
                         
                 inserted_nodes.add(iid)
             except Exception as e:
-                logger.warning(f"无法插入节点 {iid}: {e}")
+                logger.warning(f"insert_node：无法插入节点 {iid}: {e}")
             # 递归插入子节点
-            for child_key in node['children']:
+            for child_key in sorted(node['children'], key=lambda x: tree_dict[x]['sort_num']):
                 insert_node(child_key, node['iid'])
         try:
             # 先初步排序
             sorted_keys = sorted(grouped_data.keys(), key=lambda x: cls._get_sort_key(x))
-            # 根据group_data数据的group_rank的值构建一个树结构的list列表
-            # 首先获取每一个数据的parent_iid
+            # 根据group_data数据的group_rank的值构建一个树结构的嵌套字典
+            # 首先初始化嵌套字典
             for group_key in sorted_keys:
                 tree_dict[group_key] = {
                         'obj': grouped_data[group_key],
                         'iid': None,
                         'children': [],
-                        'parent': None
+                        'parent': None,
+                        'sort_num': grouped_data[group_key][0].sort_num
                     }
-                # 建立父子关系
-                for key, node in tree_dict.items():
-                    rank = parse_group_rank(key)
+            # 完善嵌套字典，建立父子关系
+            for key, node in tree_dict.items():
+                rank = parse_group_rank(key)
                     
-                    # 确定父节点key和当前节点iid
-                    if rank['E'] > 0:
-                        parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E0"
-                        parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
-                        node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E{rank['E']}"
-                    elif rank['D'] > 0:
-                        parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D0E0"
-                        parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}"
-                        node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
-                    elif rank['C'] > 0:
-                        parent_key = f"A{rank['A']}B{rank['B']}C0D0E0"
-                        parent_iid = f"A{rank['A']}B{rank['B']}"
-                        node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}"
-                    elif rank['B'] > 0:
-                        parent_key = f"A{rank['A']}B0C0D0E0"
-                        parent_iid = f"A{rank['A']}"
-                        node['iid'] = f"A{rank['A']}B{rank['B']}"
-                    else:
-                        parent_key = None
-                        parent_iid = None
-                        node['iid'] = f"A{rank['A']}"
+                # 确定父节点key和当前节点iid
+                if rank['E'] > 0:
+                    parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+                    parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+                    node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}E{rank['E']}"
+                elif rank['D'] > 0:
+                    parent_key = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+                    parent_iid = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+                    node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}D{rank['D']}"
+                elif rank['C'] > 0:
+                    parent_key = f"A{rank['A']}B{rank['B']}"
+                    parent_iid = f"A{rank['A']}B{rank['B']}"
+                    node['iid'] = f"A{rank['A']}B{rank['B']}C{rank['C']}"
+                elif rank['B'] > 0:
+                    parent_key = f"A{rank['A']}"
+                    parent_iid = f"A{rank['A']}"
+                    node['iid'] = f"A{rank['A']}B{rank['B']}"
+                else:
+                    parent_key = None
+                    parent_iid = None
+                    node['iid'] = f"A{rank['A']}"
                     
-                    # 设置父子关系
-                    if parent_key and parent_key in tree_dict:
-                        node['parent'] = parent_iid
-                        tree_dict[parent_key]['children'].append(key)
-                    else:
-                        node['parent'] = None
+                # 设置父子关系
+                if parent_key and parent_key in tree_dict:
+                    node['parent'] = parent_iid
+                    tree_dict[parent_key]['children'].append(key)
+                else:
+                    node['parent'] = None
             
-            for tree_key,tree_item in tree_dict.items():
-                if len(tree_key) == 2:
-                    insert_node(tree_key,tree_item['parent'])
-                    
+            for tree_key,tree_item in sorted(tree_dict.items(), key=lambda x: x[1]['sort_num']):
+                if tree_key:
+                    if "B0" in tree_key or len(tree_key) == 2:
+                        insert_node(tree_key,tree_item['parent'])
         except Exception as e:
             logger.error(f"构建树形结构失败: {str(e)}")
             print(traceback.format_exc())    

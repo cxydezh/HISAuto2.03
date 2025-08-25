@@ -9,7 +9,7 @@ import traceback
 from gui.tabs.base_tab import BaseTab
 from config.config_manager import ConfigManager
 import globalvariable
-from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
+from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank, parse_list_rank_to_iid
 import os
 import sys
 import functools
@@ -19,7 +19,7 @@ from models.user import User
 from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy
 from utils.hometab_funcdata import hometab_funcData
 from utils.screenshot_tool import ScreenshotTool
-from utils.home_tab_func import home_tab_action_group_func, ActionManager, ActionGroupManager
+from utils.home_tab_func import ActionGroupRun, home_tab_action_group_func, ActionManager, ActionGroupManager
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -105,9 +105,6 @@ class HomeTab(BaseTab):
         # =============================================================================
         # UI状态变量 - 由UI层管理，反映用户界面当前状态
         # =============================================================================
-        
-        # 行为组树形视图选中项的iid,格式如：A1B2C3D4
-        self.action_group_hierarchy_tree_iid = None
         # show_model_pick中选择的相对位置
         self.relate_location_selected = None
         # show_model_pick中选择与action_list相关的相对位置
@@ -140,10 +137,8 @@ class HomeTab(BaseTab):
         
         # 创建行为元管理器
         self.action_manager = ActionManager(self)
-        
-        # 创建行为组管理器
-        self.action_group_manager = ActionGroupManager(self)
-
+        # 创建该界面的控件方法类
+        self.home_tab_action_group_func_model = home_tab_action_group_func(self)
         # 创建界面
         self._create_widgets()
         
@@ -316,13 +311,13 @@ class HomeTab(BaseTab):
         
         # 创建树形视图
         self.action_tree = ttk.Treeview(tree_frame, name='actiongroup_hierarchy_tree', 
-                                       columns=("name", "userid"), selectmode='browse', show="tree headings")
+                                       columns=("name", "type"), selectmode='browse', show="tree headings")
         self.action_tree.heading("#0", text="结构")
         self.action_tree.column("#0", width=60)
         self.action_tree.heading("name", text="名称")
         self.action_tree.column("name", width=150)
-        self.action_tree.heading("userid", text="创建者")
-        self.action_tree.column("userid", width=50)
+        self.action_tree.heading("type", text="类型")
+        self.action_tree.column("type", width=50)
         
         # 创建右键菜单
         self.tree_context_menu = tk.Menu(self.action_tree, tearoff=0)
@@ -691,128 +686,7 @@ class HomeTab(BaseTab):
         return
     def _on_action_tree_select(self, event=None):
         """行为组树选择事件处理"""
-        selected = self.action_tree.selection()
-        if not selected:
-            return
-        iid = selected[0]
-        self.action_tree_selected_iid = iid
-        self.action_group_hierarchy_tree_iid = iid
-        if iid in("A0","A1","A2"):
-            self._set_action_group_entry_controls_state('disabled')
-            self._set_action_group_button_controls_state('disabled') 
-            self.btn_new_action_group.config(state='normal')
-            self.btn_run_action_group.config(state='disabled')
-        # 先全部禁用
-        self._set_home_controls_state('disabled')
-        
-        self.group_user_name_entry.config(state='disabled')
-        self.department_id_entry.config(state='disabled')
-        
-        # 获取节点的值，如果节点不存在则返回
-        try:
-            item_values = self.action_tree.item(iid, "values")
-            if not item_values or len(item_values) < 3:
-                print(f"Warning: Item {iid} has invalid values: {item_values}")
-                return
-            
-            # 如果treeview中的value的值中group_type的值为group，则表示选中的是组
-            if item_values[1] == "group":
-                # 选中的是ActionGroup
-                self.action_group_id = item_values[3]
-                
-                # 使用ActionGroupManager获取数据
-                data = self.action_group_manager.get_action_group_data("ActionGroup",self.action_group_id )
-                if data:
-                    group = data['group']
-                    user = data['user']
-                    actions = data['actions']
-                    hierarchy = data['hierarchy']
-                    
-                    self.action_group_hierarchy_id = group.group_rank_id
-                    
-                    # 填充详情区
-                    self.group_name_var.set(item_values[0] or "")
-                    self.group_last_circle_local_var.set(group.last_circle_local or "")
-                    self.group_last_circle_node_var.set(group.last_circle_node or "")
-                    self.group_setup_time_var.set(str(group.created_at or ""))
-                    self.group_update_time_var.set(str(group.updated_at or ""))
-                    self.group_user_id_var.set(str(group.user_id or ""))
-                    self.group_user_name_var.set(user.username if user else "")
-                    self.department_id_var.set(str(group.department_id or ""))
-                    self.is_auto_var.set(bool(group.is_auto or False))
-                    self.auto_time_var.set(str(group.auto_time or ""))
-                    self.group_desc_var.set(group.action_list_group_note or "")
-                    
-                    # 填充action_list_tree
-                    self.action_list.delete(*self.action_list.get_children())
-                    # 先把list_hierarchy填充到action_list_tree
-                    # 调用hometab_funcData._load_action_group_data方法，填充action_list_tree
-                    hometab_funcData._load_action_group_data(self.action_list,'ActionList',self.action_group_id)
-                    
-                    self.hierarchy_sort = group.sort_num if group else None
-                    selected_group_rank = hierarchy.group_rank if hierarchy else None
-                    
-                    # 启用中间面板按钮 - 使用ActionManager的方法
-                    self.action_manager._set_action_button_state('normal')
-            else:
-                # 选中的是ActionsGroupHierarchy
-                selected_group_rank = iid_to_group_rank(iid)
-                
-                # 使用ActionGroupManager获取层级数据
-                hierarchy = self.action_group_manager.get_hierarchy_data(selected_group_rank)
-                if hierarchy:
-                    self.group_name_var.set(hierarchy.group_name or "")
-                    self.group_last_circle_local_var.set("")
-                    self.group_last_circle_node_var.set("")
-                    self.group_setup_time_var.set(str(hierarchy.created_at or ""))
-                    self.group_update_time_var.set(str(hierarchy.updated_at or ""))
-                    self.group_user_id_var.set(str(hierarchy.doctor_id or ""))
-                    self.group_user_name_var.set("")
-                    self.department_id_var.set(str(hierarchy.department_id or ""))
-                    self.is_auto_var.set(False)
-                    self.auto_time_var.set("")
-                    self.group_desc_var.set(hierarchy.group_note or "")
-
-                    self.action_group_hierarchy_id = hierarchy.id   
-                    self.hierarchy_sort = hierarchy.sort_num
-                    self.action_group_id = None
-                
-                # 禁用中间按钮
-                for btn in [
-                    self.btn_create_action_list_group,self.btn_create_action, self.btn_record_action, self.btn_modify_action,self.btn_create_action_list_group,
-                    self.btn_delete_action, self.btn_save_action, self.btn_use_suit,self.btn_add_excel_file
-                ]:
-                    btn.config(state='disabled')
-                
-                # 清空action_list_tree
-                self.action_list.delete(*self.action_list.get_children())
-            
-            self.action_group_selected_rank = selected_group_rank
-            
-        except Exception as e:
-            print(f"Error in _on_action_tree_select: {e}")
-            print(traceback.format_exc())
-        
-        #根据当前用户的权限，设置部分控件的可用状态
-        if globalvariable.USER_IS_SUPER_ADMIN:
-            #超级管理员
-            self._set_action_group_entry_controls_state('normal')
-            self._set_action_group_button_controls_state('normal')
-        else:
-            #管理员
-            #判断当前选中项的rank中的A的值
-            rank_dict = parse_group_rank(self.action_group_selected_rank)
-            if globalvariable.USER_IS_ADMIN:
-                if (rank_dict['A'] == 1 and globalvariable.USER_DEPARTMENT_ID == self.department_id_var.get()) or (rank_dict['A'] == 0):
-                    self._set_action_group_entry_controls_state('normal')
-                    self._set_action_group_button_controls_state('normal')
-                else:
-                    self._set_action_group_entry_controls_state('disabled')
-                    self._set_action_group_button_controls_state('disabled')
-        if iid.startswith("group_"):
-            self.btn_run_action_group.config(state='normal')
-        else:
-            self.btn_run_action_group.config(state='disabled')
+        self.home_tab_action_group_func_model._on_action_tree_select()
     @prevent_double_click(interval=1.0)
     def _new_action_group_group(self):
         """新建行为组组"""
@@ -838,7 +712,8 @@ class HomeTab(BaseTab):
     def _new_action_group(self):
         """新建行为组"""
         #先判断是否有Hierarchy tree是否有被选中的项目
-        if self.action_group_hierarchy_tree_iid == None: 
+        selected_iid = self.action_tree.selection()[0]
+        if selected_iid == None: 
             messagebox.showinfo("提示", "请先选择行为组")
             return
         self.group_name_entry.config(state='normal')
@@ -874,7 +749,7 @@ class HomeTab(BaseTab):
     def _edit_action_group(self):
         #先判断Hierarchy tree是否有被选中的项目
         selected_iid = self.action_tree.selection()[0]
-        if self.action_group_hierarchy_tree_iid == None: 
+        if selected_iid == None: 
             messagebox.showinfo("提示", "请先选择行为组")
             return
 
@@ -886,13 +761,7 @@ class HomeTab(BaseTab):
         self.btn_capture_image.config(state='normal')
         self.btn_save_action_group.config(state='normal')
         self.btn_refresh_action_group.config(state='normal')
-        if selected_iid.startswith("group_"):
-            self.action_group_action_type = 2
-        elif selected_iid.startswith("A"):
-            self.action_group_action_type = 3
-        else:
-            self.action_group_action_type = None
-
+        self.action_group_action_type = 2
     @prevent_double_click(interval=1.0)
     def _save_action_group(self):
         """保存行为组"""
@@ -909,67 +778,30 @@ class HomeTab(BaseTab):
             if self.is_auto_var.get() and not self.auto_time_var.get().strip():
                 messagebox.showwarning("警告", "启用自动执行时，必须设置执行时间")
                 return
-            if self.action_group_action_type == 3 and self.action_group_hierarchy_tree_iid.startswith("A"):
-                # 开始保存行为组层级信息
-                if not hometab_funcData._save_action_group_hierarchy_data('Action',self.action_group_hierarchy_id,self.group_name_var.get(),self.group_desc_var.get(),self.is_auto_var.get(),self.auto_time_var.get()) :
-                    return False
+            if self.action_group_action_type == 1:
+                # 开始进行新增保存
+                if not self.home_tab_action_group_func_model._new_save_action_group():
+                    messagebox.showerror("错误", "保存行为组层级信息失败")
+                    return
                 messagebox.showinfo("成功", "保存行为组层级信息成功")
-                return True
+                self._refresh_action_group()
+                self._clear_action_group_info()
+                return
             else:
-                # 创建home_tab_action_group_func实例
-                home_tab_action_group_func_model = home_tab_action_group_func(
-                    group_name=self.group_name_var.get().strip(), 
-                    group_desc=self.group_desc_var.get().strip(),
-                    group_user_id=globalvariable.USER_ID,
-                    group_department_id=globalvariable.USER_DEPARTMENT_ID,
-                    is_auto=self.is_auto_var.get(),
-                    auto_time=self.auto_time_var.get(),
-                    action_group_selected_rank=self.action_group_selected_rank,
-                    action_tree_selected_iid=self.action_tree_selected_iid,
-                    action_group_type=self.action_group_action_type,
-                    sort_num=self.hierarchy_sort,
-                    action_group_id=self.action_group_id,
-                    action_group_hierarchy_id=self.action_group_hierarchy_id
-                )
-                
-                # 保存行为组
-                if home_tab_action_group_func_model._save_action_group():
-                    messagebox.showinfo("成功", "保存行为组成功")
-                    # 刷新行为组列表
-                    self._refresh_action_group()
-                    # 重置界面状态
-                    self._reset_action_group_interface()
-                else:
-                    messagebox.showerror("错误", "保存行为组失败")
-                
+                # 开始进行修改保存
+                if not self.home_tab_action_group_func_model._modify_save_action_group():
+                    messagebox.showerror("错误", "保存行为组层级信息失败")
+                    return
+                messagebox.showinfo("成功", "保存行为组层级信息成功")
+                self._refresh_action_group()
+                self._clear_action_group_info()
+                return
         except ValueError as e:
             print(traceback.format_exc())
             messagebox.showerror("验证错误", str(e))
         except Exception as e:
             print(traceback.format_exc())
             messagebox.showerror("错误", f"保存行为组时发生异常: {str(e)}")
-        finally:
-            # 确保关闭数据库会话
-            if 'home_tab_action_group_func_model' in locals():
-                home_tab_action_group_func_model._session_close()
-    
-    def _reset_action_group_interface(self):
-        """重置行为组界面状态"""
-        # 禁用所有相关控件
-        for widget in (self.btn_new_action_group, self.btn_edit_action_group, 
-                      self.btn_delete_action_group, self.btn_capture_image, 
-                      self.btn_save_action_group, self.group_name_entry, 
-                      self.group_desc_entry, self.auto_time_entry, self.is_auto_check):
-            widget.config(state='disabled')
-        
-        # 清空表单
-        self.group_name_var.set("")
-        self.group_desc_var.set("")
-        self.auto_time_var.set("")
-        self.is_auto_var.set(False)
-        
-        # 重置操作类型
-        self.action_group_action_type = None
     @prevent_double_click(interval=1.0)
     def _capture_image(self):
         """图像采集"""
@@ -993,27 +825,11 @@ class HomeTab(BaseTab):
         if not selected:
             messagebox.showwarning("警告", "请先选择要删除的行为组")
             return
-            
+        action_tree_node_type = self.action_tree.item(selected[0], "values")[1]
         if messagebox.askyesno("确认", "确定要删除选中的行为组吗？\n此操作将同时删除该行为组下的所有行为元，且不可恢复。"):
             try:
-                # 创建home_tab_action_group_func实例
-                home_tab_action_group_func_model = home_tab_action_group_func(
-                    self.group_name_var.get().strip(), 
-                    self.group_desc_var.get().strip(),
-                    globalvariable.USER_ID,
-                    globalvariable.USER_DEPARTMENT_ID,
-                    self.is_auto_var.get(),
-                    self.auto_time_var.get(),
-                    self.action_group_selected_rank,
-                    self.action_tree_selected_iid,
-                    3,  # 删除操作类型
-                    self.hierarchy_sort,
-                    self.action_group_id,
-                    self.action_group_hierarchy_id
-                )
-                
                 # 删除行为组
-                if home_tab_action_group_func_model._delete_action_group(self.action_tree_selected_iid,self.action_group_id,self.action_group_hierarchy_id):
+                if self.home_tab_action_group_func_model._delete_action_group(self.action_tree_selected_iid,self.action_group_id,self.action_group_hierarchy_id,node_type=action_tree_node_type):
                     messagebox.showinfo("成功", "删除行为组成功")
                     # 刷新行为组列表
                     self._refresh_action_group()
@@ -1028,11 +844,6 @@ class HomeTab(BaseTab):
             except Exception as e:
                 print(traceback.format_exc())
                 messagebox.showerror("错误", f"删除行为组时发生异常: {str(e)}")
-            finally:
-                # 确保关闭数据库会话
-                if 'home_tab_action_group_func_model' in locals():
-                    home_tab_action_group_func_model._session_close()
-    
     def _clear_action_group_info(self):
         """清空行为组信息"""
         # 清空表单
@@ -1049,7 +860,6 @@ class HomeTab(BaseTab):
         self.department_id_var.set("")
         
         # 重置相关变量
-        self.action_group_hierarchy_tree_iid = None
         self.action_group_selected_rank = None
         self.hierarchy_sort = None
         self.action_group_action_type = None
@@ -1065,8 +875,8 @@ class HomeTab(BaseTab):
     @prevent_double_click(interval=1.0)
     def _run_action_group(self):
         """运行行为组"""
-        action_group_manager = ActionGroupManager(self)
-        if action_group_manager.run_action_group(self.action_group_id):
+        action_group_run = ActionGroupRun(self)
+        if action_group_run.run_action_group(self.action_group_id):
             messagebox.showinfo("提示", "行为组运行成功")
         else:
             messagebox.showerror("错误", "行为组运行失败")
@@ -1110,8 +920,6 @@ class HomeTab(BaseTab):
             self._create_image_controls()
         elif action_type == "function":
             self._create_function_controls()
-        elif action_type == "group":
-            self._create_group_controls()
         # 强制更新界面
         self.action_list_frame.update_idletasks()
     
@@ -1125,9 +933,6 @@ class HomeTab(BaseTab):
         ttk.Label(self.action_list_frame, text="备注:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.action_list_hierarchy_note_var = tk.StringVar(master=self.frame)
         ttk.Entry(self.action_list_frame, textvariable=self.action_list_hierarchy_note_var).grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
-    def _create_group_controls(self):
-        """创建组控件"""
-        ttk.Label(self.action_list_frame, text="欢迎来到AI世界").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
     def _create_mouse_controls(self):
         """创建鼠标控件"""
         # 创建左右两列Frame容器
@@ -1435,21 +1240,9 @@ class HomeTab(BaseTab):
         action_name = values[0]  # 名称在values[2]
         action_type = values[1]  # 类型在values[1]
         action_note = values[2]  # 下一步在values[3]
-        if action_type == "list_hierarchy":
-            self.current_action_list_hierarchy_id = selected_iid.split("_")[1]
-            self.current_action_id = None
-        else:
-            action_id = selected_iid.split("_")[1]
-            self.current_action_id = action_id
-            parent_selected_iid = self.action_list.parent(item)
-            if parent_selected_iid:
-                if parent_selected_iid.startswith("hierarchy_"):
-                    self.current_action_list_hierarchy_id = parent_selected_iid.split("_")[1]
-                    self.current_action_list_hierarchy_rank = self.action_manager._get_action_list_rank(self.current_action_list_hierarchy_id)
-                else:
-                    self.current_action_list_hierarchy_id = None
-            else:
-                self.current_action_list_hierarchy_id = None
+        self.current_action_id = values[3]
+        self.current_action_list_selected_rank = self.action_manager._get_action_list_rank(self.current_action_id)
+        self.current_action_list_hierarchy_id = parse_list_rank_to_iid(self.current_action_list_selected_rank)
         # 清空动态区域
         for widget in self.action_list_frame.winfo_children():
             widget.destroy()
@@ -1504,7 +1297,7 @@ class HomeTab(BaseTab):
                                       self.hierarchy_sort,is_action_list=True,action_group_id=self.action_group_id)
 
         #刷新行为组树
-        self._refresh_action_list()
+        hometab_funcData._load_action_group_data(self.action_list,'ActionList',self.action_group_id)
     # 行为操作方法  
     @prevent_double_click(interval=1.0)
     def _create_action(self):
@@ -1578,7 +1371,7 @@ class HomeTab(BaseTab):
         try:
             if self.action_manager.delete_action(self.action_type_var.get(),self.current_action_id,self.current_action_list_hierarchy_id):
                 # 刷新行为列表
-                self._refresh_action_list()
+                hometab_funcData._load_action_group_data(self.action_list,'ActionList',self.action_group_id)
                 # 更新按钮状态
                 self._update_action_buttons_state()
                 return True
@@ -1600,7 +1393,7 @@ class HomeTab(BaseTab):
             
             if self.action_manager.save_action():
                 # 刷新行为列表
-                self._refresh_action_list()
+                hometab_funcData._load_action_group_data(self.action_list,'ActionList',self.action_group_id)
                 # 更新按钮状态
                 self._update_action_buttons_state()
                 #弹窗提示任务完成
@@ -2051,19 +1844,6 @@ class HomeTab(BaseTab):
         ]:
             ctrl.config(state=state)
     
-    # =============================================================================
-    # 行为元操作辅助方法
-    def _refresh_action_list(self):
-        """刷新行为列表"""
-        if not self.action_group_id:
-            return
-            
-        try:
-            # 使用ActionManager的方法刷新行为列表
-            self.action_manager._refresh_action_list()
-        except Exception as e:
-            messagebox.showerror("错误", f"刷新行为列表失败: {str(e)}")
-
     def _update_action_buttons_state(self):
         """更新行为按钮状态"""
         # 根据是否有选中项来设置按钮状态

@@ -1,3 +1,4 @@
+from operator import and_
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
@@ -15,9 +16,9 @@ import win32gui  # type: ignore
 import win32api  # type: ignore
 from database.db_manager import DatabaseManager
 from config.config_manager import ConfigManager
-from models.action_suit import ActionsSuitGroup, ActionsSuitGroupHierarchy
+from models.action_suit import ActionSuitList, ActionsSuitGroup, ActionsSuitGroupHierarchy
 from models.actions import ActionGroup, ActionList, ActionsGroupHierarchy,ActionMouse, ActionKeyboard,ActionClass, ActionAI, ActionPrintscreen, ActionFunction,ActionCodeTxt
-from models.debug_actions import ActionsDebugGroup, ActionsDebugGroupHierarchy
+from models.debug_actions import ActionDebugList, ActionsDebugGroup, ActionsDebugGroupHierarchy
 from models.user import User
 from models.department import Department
 from gui.tabs.Hierarchyutils import parse_group_rank, iid_to_group_rank
@@ -32,72 +33,10 @@ from utils.hometab_funcdata import hometab_funcData
 class home_tab_action_group_func:
     """用于支持home_tab.py中与行为组相关的相关方法的实现"""
     
-    def __init__(self, group_name: str, group_desc: str, group_user_id: str,
-                  group_department_id: str,is_auto: bool, auto_time: str, 
-                 action_group_selected_rank: str,action_tree_selected_iid: str,
-                 action_group_type:int,sort_num:int,action_group_id:int,action_group_hierarchy_id:int):
-        """初始化行为组信息,用于新增保存行为组
-        
-        Args:
-            group_name: 行为组名称
-            group_desc: 行为组描述
-            group_user_id: 用户ID
-            group_department_id: 科室ID
-            is_auto: 是否自动执行
-            auto_time: 自动执行时间
-            action_group_selected_rank: 行为组秩序
-            action_tree_selected_iid: 行为树选中项的iid
-            action_group_type: 行为组类型,1:表示新增保存；2.表示修改保存。
-            sort_num: 排序号
-            action_group_id: 行为组ID
-            action_group_hierarchy_id: 行为组层次ID
-        Raises:
-            ValueError: 当必要参数为空或无效时
-        """
-        # 验证必要参数，使用for循环验证，同时提示用户哪个参数为空
-        required_params = [
-            ("group_name", group_name), 
-            ("group_user_id", group_user_id), 
-            ("group_department_id", group_department_id), 
-            ("action_group_selected_rank", action_group_selected_rank),
-            ("action_tree_selected_iid", action_tree_selected_iid),
-            ("action_group_type", action_group_type),
-            ("sort_num", sort_num)
-        ]
-       
-#        missing_params = []
- #       for param, value in required_params:
- #           if not value:
- #               missing_params.append(param)
-        
-       
- #         if missing_params:
- #           error_msg = f"行为组信息无效：以下参数不能为空: {', '.join(missing_params)}"
- #           logger.error(error_msg)
- #           messagebox.showinfo("提示", error_msg)
- #           raise ValueError(error_msg)
-            
-        # 验证自动执行时间
-        if is_auto and not auto_time:
-            error_msg = "行为组信息无效：auto为True时，auto_time不能为空"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-            
-        # 初始化属性
-        self.group_name = group_name
-        self.group_desc = group_desc
-        self.group_user_id = group_user_id
-        self.group_department_id = group_department_id
-        self.is_auto = is_auto
-        self.auto_time = auto_time
-        self.action_group_selected_rank = action_group_selected_rank
-        self.action_tree_selected_iid = action_tree_selected_iid
-        self.action_group_type = action_group_type
-        self.sort_num = sort_num
-        self.action_group_id = action_group_id
-        self.action_group_hierarchy_id = action_group_hierarchy_id
-        self.session = None
-        """1:表示新增保存；2.表示修改保存；"""
+    def __init__(self,home_tab):
+        self.home_tab = home_tab
+        self.action_group_manager = ActionGroupManager(home_tab)
+        self.action_manager = ActionManager(home_tab)
     def _get_session(self):
         """获取数据库会话"""
         try:
@@ -116,96 +55,255 @@ class home_tab_action_group_func:
         except Exception as e:
             logger.error(f"获取数据库会话失败: {str(e)}")
             return None
-    
-    def _save_action_group(self)->bool:
-        """保存行为组"""
-        session = None
+    def _on_action_tree_select(self):
+        """行为组树形视图选中项发生变化时触发"""
+        selected = self.home_tab.action_tree.selection()
+        if not selected:
+            return
+        selected_iid = selected[0]
+        self.selected_group_rank = None
+        self.home_tab.action_tree_selected_iid = selected_iid
+        if selected_iid in ("A1","A2","A3"):
+            self.home_tab._set_action_group_entry_controls_state("disabled")
+            self.home_tab._set_action_group_button_controls_state("disabled")
+            self.home_tab.btn_new_action_group.config(state="normal")
+            self.home_tab.btn_run_action_group.config(state="disabled")
+        # 先全部禁用
+        self.home_tab._set_home_controls_state('disabled')
+        
+        self.home_tab.group_user_name_entry.config(state='disabled')
+        self.home_tab.department_id_entry.config(state='disabled')
+        
+        # 获取节点的值，如果节点不存在则返回
         try:
-            #判断行为组任务类型
-            if self.action_group_type == 1:
-                #新增保存
-                #获取数据库会话
-                session = self._get_session()
-                if not session:
-                    return False
-                #获取最大的sort_num
-                max_sort_num = 0
-                groups = session.query(ActionGroup).filter_by(group_rank_id=self.action_group_hierarchy_id).all()
-                if groups:
-                    for group_item in groups:
-                        if group_item.sort_num > max_sort_num:
-                            max_sort_num = group_item.sort_num
-                #生成新增行为组记录
-                new_action_group = ActionGroup(
-                    action_list_group_note=self.group_desc,
-                    is_auto=self.is_auto,
-                    auto_time=self.auto_time,
-                    user_id=self.group_user_id,
-                    department_id=self.group_department_id,
-                    created_at=datetime.now(), 
-                    group_rank_id=self.action_group_hierarchy_id,
-                    sort_num=max_sort_num + 1,
-                )
-                session.add(new_action_group)
-                session.commit()
-                logger.info(f"成功创建行为组: {self.group_name}")
-                return True
-            elif self.action_group_type == 2:
-                #修改保存
-                session = self._get_session()
-                if not session:
-                    return False
-
-                #来源于ActionsGroupHierarchy表
-                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=self.action_group_hierarchy_id).first()
-                if hierarchy:
-                    #更新hierarchy表的记录
-                    hierarchy.group_name = self.group_name
-                    hierarchy.group_note = self.group_desc
-                    hierarchy.doctor_id = self.group_user_id
-                    hierarchy.updated_at = datetime.now()
-                else:
-                    logger.error(f"无法找到行为组层次记录: {self.action_group_hierarchy_id}")
-                    return False
-                if hierarchy.group_type == "ActionGroup":
-                    #来源于Action_list_group表
-                    group = session.query(ActionGroup).filter_by(group_rank_id=hierarchy.id).first()
-                    if group:
-                        #更新group表的记录
-                        group.action_list_group_note = self.group_desc
-                        group.is_auto = self.is_auto
-                        group.auto_time = self.auto_time
-                        group.updated_at = datetime.now()
-                        session.commit()
-                        logger.info(f"成功更新行为组: {self.group_name}")
-                        return True
-                    else:
-                        logger.error(f"无法找到行为组记录: {self.action_group_id}")
-                        return False
-                else:
-                    session.commit()
-                    logger.info(f"成功更新行为组层次: {self.group_name}")
-                    return True
+            item_values = self.home_tab.action_tree.item(selected_iid, "values")
+            if not item_values or len(item_values) < 3:
+                print(f"Warning: Item {selected_iid} has invalid values: {item_values}")
+                return
+            
+            # 如果treeview中的value的值中group_type的值为group，则表示选中的是组
+            if item_values[1] == "group":
+                # 选中的是ActionGroup
+                self.home_tab.action_hierarchy_id = item_values[3]
+                # 使用ActionGroupManager获取数据
+                data = self.action_group_manager.get_action_group_data("ActionGroup",self.home_tab.action_hierarchy_id )
+                if data:
+                    group = data['group']
+                    user = data['user']
+                    actions = data['actions']
+                    hierarchy = data['hierarchy']
+                    
+                    self.home_tab.action_group_hierarchy_id = group.group_rank_id
+                    self.home_tab.action_group_id = group.id
+                    # 填充详情区
+                    self.home_tab.group_name_var.set(item_values[0] or "")
+                    self.home_tab.group_last_circle_local_var.set(group.last_circle_local or "")
+                    self.home_tab.group_last_circle_node_var.set(group.last_circle_node or "")
+                    self.home_tab.group_setup_time_var.set(str(group.created_at or ""))
+                    self.home_tab.group_update_time_var.set(str(group.updated_at or ""))
+                    self.home_tab.group_user_id_var.set(str(group.user_id or ""))
+                    self.home_tab.group_user_name_var.set(user.username if user else "")
+                    self.home_tab.department_id_var.set(str(group.department_id or ""))
+                    self.home_tab.is_auto_var.set(bool(group.is_auto or False))
+                    self.home_tab.auto_time_var.set(str(group.auto_time or ""))
+                    self.home_tab.group_desc_var.set(group.action_list_group_note or "")
+                    self.home_tab.hierarchy_sort = group.sort_num if group else None
+                    # 填充action_list_tree
+                    self.home_tab.action_list.delete(*self.home_tab.action_list.get_children())
+                    # 调用hometab_funcData._load_action_group_data方法，填充action_list_tree
+                    hometab_funcData._load_action_group_data(self.home_tab.action_list,'ActionList',self.home_tab.action_group_id)
+                    
+                    self.home_tab.hierarchy_sort = group.sort_num if group else None
+                    self.selected_group_rank = hierarchy.group_rank if hierarchy else None
+                    
+                    # 启用中间面板按钮 - 使用ActionManager的方法
+                    self.action_manager._set_action_button_state('normal')
             else:
-                logger.error(f"无效的行为组类型: {self.action_group_type}")
-                return False
+                # 选中的是ActionsGroupHierarchy
+                self.selected_group_rank = iid_to_group_rank(selected_iid)
+                
+                # 使用ActionGroupManager获取层级数据
+                hierarchy = self.action_group_manager.get_hierarchy_data(self.selected_group_rank)
+                if hierarchy:
+                    self.home_tab.group_name_var.set(hierarchy.group_name or "")
+                    self.home_tab.group_last_circle_local_var.set("")
+                    self.home_tab.group_last_circle_node_var.set("")
+                    self.home_tab.group_setup_time_var.set(str(hierarchy.created_at or ""))
+                    self.home_tab.group_update_time_var.set(str(hierarchy.updated_at or ""))
+                    self.home_tab.group_user_id_var.set(str(hierarchy.doctor_id or ""))
+                    self.home_tab.group_user_name_var.set("")
+                    self.home_tab.department_id_var.set(str(hierarchy.department_id or ""))
+                    self.home_tab.is_auto_var.set(False)
+                    self.home_tab.auto_time_var.set("")
+                    self.home_tab.group_desc_var.set(hierarchy.group_note or "")
+
+                    self.home_tab.action_group_hierarchy_id = hierarchy.id   
+                    self.home_tab.hierarchy_sort = hierarchy.sort_num
+                    self.home_tab.action_group_id = None
+                
+                # 禁用中间按钮
+                for btn in [
+                    self.home_tab.btn_create_action_list_group,self.home_tab.btn_create_action, self.home_tab.btn_record_action, self.home_tab.btn_modify_action,self.home_tab.btn_create_action_list_group,
+                    self.home_tab.btn_delete_action, self.home_tab.btn_save_action, self.home_tab.btn_use_suit,self.home_tab.btn_add_excel_file
+                ]:
+                    btn.config(state='disabled')
+                
+                # 清空action_list_tree
+                self.home_tab.action_list.delete(*self.home_tab.action_list.get_children())
+            
+            self.home_tab.action_group_selected_rank = self.selected_group_rank
+            
         except Exception as e:
-            if session:
-                session.rollback()
-            logger.error(f"保存行为组失败: {str(e)}")
+            print(f"Error in _on_action_tree_select: {e}")
+            print(traceback.format_exc())
+        
+        #根据当前用户的权限，设置部分控件的可用状态
+        if globalvariable.USER_IS_SUPER_ADMIN:
+            #超级管理员
+            self.home_tab._set_action_group_entry_controls_state('normal')
+            self.home_tab._set_action_group_button_controls_state('normal')
+        else:
+            #管理员
+            #判断当前选中项的rank中的A的值
+            rank_dict = parse_group_rank(self.home_tab.action_group_selected_rank)
+            if globalvariable.USER_IS_ADMIN:
+                if (rank_dict['A'] == 1 and globalvariable.USER_DEPARTMENT_ID == self.home_tab.department_id_var.get()) or (rank_dict['A'] == 0):
+                    self.home_tab._set_action_group_entry_controls_state('normal')
+                    self.home_tab._set_action_group_button_controls_state('normal')
+                else:
+                    self.home_tab._set_action_group_entry_controls_state('disabled')
+                    self.home_tab._set_action_group_button_controls_state('disabled')
+        if self.home_tab.action_tree.item(selected_iid, "values")[1] == "group":
+            self.home_tab.btn_run_action_group.config(state='normal')
+        else:
+            self.home_tab.btn_run_action_group.config(state='disabled')
+
+    def _new_save_action_group(self)->bool:
+        """新增保存行为组"""
+        session = self._get_session()
+        if not session:
             return False
-        finally:
-            if session and session != self.session:
-                session.close()
+        #获取最大的sort_num
+        self.max_sort_num = 0
+        self.target_iid = ""
+        self.target_rank = ""
+        self.max_rank_lastNum = 0
+        next_key = ""
+        next_two_key = ""
+        ls_sort_field = self.home_tab.action_tree_selected_iid
+        ls_sort_dict = parse_group_rank(ls_sort_field)
+        if self.home_tab.action_tree.item(self.home_tab.action_tree_selected_iid, "values")[1] == "group":
+            # 目标sort
+            self.target_iid = self.home_tab.action_tree_selected_iid[:-2]
+            for key,value in ls_sort_dict.items():
+                if value == 0:
+                    if next_key == "":
+                        next_two_key = key
+                        break
+                else:
+                    next_key = key
+        else:
+            self.target_iid = self.home_tab.action_tree_selected_iid
+            for key,value in ls_sort_dict.items():
+                if value == 0:
+                    if next_key == "":
+                        next_key = key
+                    else:
+                        next_two_key = key
+                        break
+        if next_two_key == "":
+            groups = session.query(ActionsGroupHierarchy).filter(ActionsGroupHierarchy.group_rank.like(self.target_iid)).all()
+        else:
+            groups = session.query(ActionsGroupHierarchy).filter(
+            and_(
+            ActionsGroupHierarchy.group_rank.like(self.target_iid),
+            ActionsGroupHierarchy.group_rank.like(next_two_key + "0")
+            )
+            ).all()
+        if groups:
+            for group_item in groups:
+                ls_rank_dict = parse_group_rank(group_item.group_rank)
+                if ls_rank_dict[next_key] > self.max_rank_lastNum:
+                    self.max_rank_lastNum = ls_rank_dict[next_key]
+                if group_item.sort_num > self.max_sort_num:
+                    self.max_sort_num = group_item.sort_num
+        else:
+            self.max_sort_num = 1
+            self.max_rank_lastNum = 1
+        self.target_rank = self.target_iid + next_key + str(self.max_rank_lastNum)
+        self.target_rank = iid_to_group_rank(self.target_rank)
+        # 新增行为组层次记录
+        new_hierarchy = ActionsGroupHierarchy(
+            group_name=self.home_tab.group_name_var.get(),
+            group_rank=self.target_rank,
+            group_type="group",
+            group_note=self.home_tab.group_desc_var.get(),
+            doctor_id=self.home_tab.group_user_id_var.get(),
+            department_id=self.home_tab.department_id_var.get(),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            sort_num=self.max_sort_num + 1,
+        )
+        session.add(new_hierarchy)
+        session.flush()
+        # 新增行为组记录
+        new_group = ActionGroup(
+            action_list_group_note=self.home_tab.group_desc_var.get(),
+            is_auto=self.home_tab.is_auto_var.get(),
+            auto_time=self.home_tab.auto_time_var.get(),
+            user_id=self.home_tab.group_user_id_var.get(),
+            department_id=self.home_tab.department_id_var.get(),
+            created_at=datetime.now(), 
+            group_rank_id=new_hierarchy.id
+        )
+        session.add(new_group)
+        session.commit()
+        self._session_close()
+        logger.info(f"成功创建行为组: {self.home_tab.group_name_var.get()}")
+        return True
+    def _modify_save_action_group(self)->bool:
+        """修改保存行为组"""
+        session = self._get_session()
+        if not session:
+            return False
+        # 修改行为组层次记录
+        hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=self.home_tab.action_group_hierarchy_id).first()
+        if hierarchy:
+            hierarchy.group_name = self.home_tab.group_name_var.get()
+            hierarchy.group_note = self.home_tab.group_desc_var.get()
+            hierarchy.doctor_id = self.home_tab.group_user_id_var.get()
+            hierarchy.updated_at = datetime.now()
+        else:
+            logger.error(f"无法找到行为组层次记录: {self.home_tab.action_group_hierarchy_id}")
+            return False
+        # 修改行为组记录
+        group = session.query(ActionGroup).filter_by(id=self.home_tab.action_group_id).first()
+        if group:
+            group.action_list_group_note = self.home_tab.group_desc_var.get()
+            group.is_auto = self.home_tab.is_auto_var.get()
+            group.auto_time = self.home_tab.auto_time_var.get()
+            group.updated_at = datetime.now()
+            group.sort_num = self.home_tab.hierarchy_sort
+        else:
+            logger.error(f"无法找到行为组记录: {self.home_tab.action_group_id}")
+            return False
+        session.commit()
+        self._session_close()
+        logger.info(f"成功修改行为组层次: {self.home_tab.group_name_var.get()}")
+        return True
     @classmethod
-    def _delete_action_group(cls,action_tree_selected_iid,action_group_id,action_group_hierarchy_id)->bool:
+    def _delete_action_group(cls,action_tree_selected_iid,action_group_id,action_group_hierarchy_id,node_type)->bool:
         """删除行为组。action_tree_selected_iid为行为组列表层级iid。action_group_id为行为组id。action_group_hierarchy_id为行为组层次id。"""
         session = None
         try:
             cls.action_tree_selected_iid = action_tree_selected_iid
             cls.action_group_id = action_group_id
             cls.action_group_hierarchy_id = action_group_hierarchy_id
-            hometab_funcData.delete_action_group(sheet_type="Action",action_tree_selected_iid=cls.action_tree_selected_iid,action_group_id=cls.action_group_id,action_group_hierarchy_id=cls.action_group_hierarchy_id)
+            cls.node_type = node_type
+            hometab_funcData.delete_action_group(sheet_type="Action",action_tree_selected_iid=cls.action_tree_selected_iid,
+                                                 action_group_id=cls.action_group_id,
+                                                 action_group_hierarchy_id=cls.action_group_hierarchy_id,
+                                                 node_type=cls.node_type)
             return True
         except Exception as e:
             if session:
@@ -373,8 +471,458 @@ def _home_capture_image(action_group_id: int, master: tk.Tk):
         print(traceback.format_exc())
         messagebox.showerror("错误", f"图像采集失败: {str(e)}")
         return False
+class ActionGroupRun:
+    def __init__(self, home_tab):
+        self.home_tab = home_tab
+        self.logger = Logger()
+    def _get_session(self):
+        """获取数据库会话"""
+        session = None
+        #获取数据库会话
+        config = ConfigManager()
+        db_path = config.get_value('System', 'DataSource')
+        encryption_key = config.get_value('Security', 'DBEncryptionKey')
+        if not db_path or not encryption_key:
+            return
+        db_manager = DatabaseManager(db_path, encryption_key)
+        db_manager.initialize()
+        session = db_manager.Session()
+        if not session:
+            return
+        self.session = session
+        return session
+    def _close_session(self):
+        """关闭数据库会话"""
+        if self.session:
+            self.session.close()
+            self.session = None
+            logger.info("数据库会话已关闭")
+        return True
+    def run_action_group(self, group_id):
+        """运行行为组"""
+        self.group_id = group_id
+        session = self._get_session(True)
+        self.excel_value = None
+        if not session:
+            return False
+        
+        try:
+            group = session.query(ActionGroup).filter_by(id=group_id).first()
+            if not group:
+                return False
+            # 判断行为组中的excel_name、excel_sheet_num、excel_column是否为空
+            if group.excel_name and group.excel_sheet_num and group.excel_column:
+                # 读取excel文件
+                excel_file = group.excel_name
+                excel_sheet_num = group.excel_sheet_num
+                excel_column = group.excel_column
+                # 读取excel文件
+                excel_data = pd.read_excel(excel_file, sheet_name=excel_sheet_num)
+                # 获取excel文件的列
+                excel_column_data = excel_data[excel_column]
+                # 开始执行循环，直到excel_column_data.iloc[0]为空
+                excel_loop_result = True
+                while excel_column_data.iloc[0] is not None and excel_loop_result:
+                    # 获取excel文件的值
+                    self.excel_value = excel_column_data.iloc[0]
+                    excel_loop_result = self.run_action(self.excel_value)
+                    if excel_loop_result:
+                        # 如果excel_loop_result为True，则在excel_column的下一列中输入"OK"
+                        excel_column_data.iloc[1] = "OK"
+                        continue
+                    else:
+                        # 如果excel_loop_result为False，则在excel_column的下一列中输入"NG"
+                        excel_column_data.iloc[1] = "NG"
+                        continue
+            else:
+                ls_result = self.run_action(self.group_id)
+                if not ls_result:
+                    return False
+            #弹窗提示任务完成
+            return True
+        except Exception as e:
+            self._close_session()
+            print(f"Error running action group: {e}")
+            print(traceback.format_exc())
+            return False
 
-    
+    def run_action(self, excel_value):
+        """执行行为列表"""
+        session = self._get_session(True)
+        if not session:
+            return False
+        try:
+            # 获取行为列表
+            actions = session.query(ActionList).filter_by(group_id=self.group_id).all()  
+            if not actions:
+                return False
+            action_loop_result = True
+            #开始执行actions中的action,如果action.next_action_id为空，则下一个action按照顺序执行；如果action.next_action_id不为空，则跳转到next_action_id的action执行。
+            # 创建一个索引来跟踪当前执行的action
+            current_index = 0
+            while current_index < len(actions):
+                action = actions[current_index]
+                
+                # 根据action_type执行相应的操作
+                if action.action_type == 'mouse':
+                    action_loop_result = self.run_mouse_action(action.id)
+                    logger.info(f"{action.action_name}:鼠标动作执行结果: {action_loop_result}")
+                elif action.action_type == 'keyboard':
+                    action_loop_result = self.run_keyboard_action(action.id)
+                    logger.info(f"{action.action_name}:键盘动作执行结果: {action_loop_result}")
+                elif action.action_type == 'code':
+                    action_loop_result = self.run_code_action(action.id)
+                    logger.info(f"{action.action_name}:代码动作执行结果: {action_loop_result}")
+                elif action.action_type == 'class':
+                    action_loop_result = self.run_class_action(action.id)
+                    logger.info(f"{action.action_name}:类动作执行结果: {action_loop_result}")
+                elif action.action_type == 'AI':
+                    action_loop_result = self.run_AI_action(action.id)
+                    logger.info(f"{action.action_name}:AI动作执行结果: {action_loop_result}")
+                elif action.action_type == 'image':
+                    action_loop_result = self.run_image_action(action.id)
+                    logger.info(f"{action.action_name}:图像动作执行结果: {action_loop_result}")
+                elif action.action_type == 'function':
+                    action_loop_result = self.run_function_action(action.id)
+                    logger.info(f"{action.action_name}:函数动作执行结果: {action_loop_result}")
+                else:
+                    return False
+                
+                # 检查执行结果
+                if not action_loop_result:
+                    return False
+                
+                # 处理下一个action
+                if action.next_id and action.next_id != 'None':
+                    # 如果有指定的下一个action_id，查找对应的action
+                    next_action = session.query(ActionList).filter_by(id=action.next_id).first()
+                    if not next_action:
+                        return False
+                    current_index = action.next_id
+                else:
+                    # 如果没有指定next_action_id，则按顺序执行下一个
+                    current_index += 1
+            
+            return True
+        except Exception as e:
+            print(f"Error in run_action: {e}")
+            return False
+
+    def run_mouse_action(self, action_id):
+        """执行鼠标动作"""
+        session = self._get_session(True)
+        if not session:
+            return False
+            
+        try:
+            # 获取鼠标行为列表
+            mouse_action = session.query(ActionMouse).filter_by(action_list_id=action_id).first()
+            if not mouse_action:
+                logger.error(f"鼠标动作列表不存在: {action_id}")
+                return False
+            #如果mouse_action.time_diff为空，则不等待
+            if mouse_action.time_diff:
+                time.sleep(mouse_action.time_diff)
+            # 鼠标动作(1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
+            # 开始执行mouse_action
+            if mouse_action.mouse_action == 1:
+                # 开始执行click_action
+                pyautogui.click(mouse_action.x,mouse_action.y)
+                return True
+            elif mouse_action.mouse_action == 2:
+                # 开始执行右击
+                pyautogui.rightClick(mouse_action.x,mouse_action.y)
+                return True
+            elif mouse_action.mouse_action == 3:
+                # 开始执行左键按下
+                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='left')
+                return True
+            elif mouse_action.mouse_action == 4:
+                # 开始执行右键按下
+                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='right')
+                return True
+            elif mouse_action.mouse_action == 5:
+                # 开始执行左键释放
+                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='left')
+                return True
+            elif mouse_action.mouse_action == 6:
+                # 开始执行右键释放
+                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='right')
+                return True
+            elif mouse_action.mouse_action == 7:
+                # 开始执行滚轮动作
+                pyautogui.scroll(mouse_action.mouse_size)
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"Error in run_mouse_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_keyboard_action(self, action_id):
+        """执行键盘动作"""
+        session = self._get_session(True)
+        if not session:
+            return False
+            
+        try:
+            # 获取键盘行为列表
+            keyboard_action = session.query(ActionKeyboard).filter_by(action_list_id=action_id).first()
+            if not keyboard_action:
+                logger.error(f"键盘动作列表不存在: {action_id}")
+                return False
+            #如果keyboard_action.time_diff为空，则不等待
+            if keyboard_action.time_diff:
+                time.sleep(keyboard_action.time_diff)
+            # 键盘类型(1:按下,2:释放,3:单击,4:文本)
+            if keyboard_action.keyboard_type == 1:
+                # 开始执行按下
+                pyautogui.keyDown(keyboard_action.keyboard_value)
+                return True
+            elif keyboard_action.keyboard_type == 2:
+                # 开始执行释放
+                pyautogui.keyUp(keyboard_action.keyboard_value)
+                return True
+            elif keyboard_action.keyboard_type == 3:
+                # 开始执行单击
+                pyautogui.press(keyboard_action.keyboard_value)
+                return True
+            elif keyboard_action.keyboard_type == 4:
+                # 开始执行文本
+                pyautogui.write(keyboard_action.keyboard_value)
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"Error in run_keyboard_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_class_action(self, action_id):
+        """执行类动作"""
+        session = self._get_session(True)
+        if not session:
+            return False
+            
+        try:
+            # 获取类行为列表
+            class_action = session.query(ActionClass).filter_by(action_list_id=action_id).first()
+            if not class_action:
+                logger.error(f"类动作列表不存在: {action_id}")
+                return False
+            #如果class_action.time_diff为空，则不等待
+            if class_action.time_diff:
+                time.sleep(class_action.time_diff)
+            # 获取当前鼠标所在的位置所在的应用的类名，然后与class_action.class_name进行匹配
+            if self.get_current_class(class_action):
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"Error in run_class_action: {e}")
+            return False
+
+    def run_AI_action(self, action_id):
+        """执行AI动作"""
+        session = self._get_session(True)
+        if not session:
+            return False
+            
+        try:
+            # 获取AI行为列表
+            AI_action = session.query(ActionAI).filter_by(action_list_id=action_id).first()
+            if not AI_action:
+                logger.error(f"AI动作列表不存在: {action_id}")
+                return False
+            #如果AI_action.time_diff为空，则不等待
+            if AI_action.time_diff:
+                time.sleep(AI_action.time_diff)
+            # 待完善
+            return False
+        except Exception as e:
+            print(f"Error in run_AI_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_image_action(self, action_id):
+        """执行图像动作"""
+        session = self._get_session(True)
+        if not session:
+            return False
+            
+        try:
+            # 获取图像行为列表
+            image_action = session.query(ActionPrintscreen).filter_by(action_list_id=action_id).first()
+            if not image_action:
+                logger.error(f"图像动作列表不存在: {action_id}")
+                return False
+            #如果image_action.time_diff为空，则不等待
+            if image_action.time_diff:
+                time.sleep(image_action.time_diff)
+            # 开始执行截屏
+            get_picture = pyautogui.screenshot(region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
+            # 如果image_action.match_picture_name不为空，则开始执行匹配图片
+            if image_action.match_picture_name:
+                # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
+                config = ConfigManager()
+                local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
+                # 开始执行截图与本地图片匹配，如果匹配到，则开始执行鼠标动作
+                try:
+                    # 检查本地图片是否存在
+                    if not os.path.exists(local_picture_path):
+                        logger.error(f"本地匹配图片不存在: {local_picture_path}")
+                        return False
+                    
+                    # 保存当前截图到临时文件用于匹配
+                    temp_screenshot_path = os.path.join(os.path.dirname(local_picture_path), f"temp_screenshot_{int(time.time())}.png")
+                    get_picture.save(temp_screenshot_path)
+                    
+                    logger.info(f"开始匹配图片: {image_action.match_picture_name}")
+                    # 设置匹配置信度阈值
+                    confidence = 0.8  # 可以根据需要调整匹配精度
+                    
+                    # 使用OpenCV进行更精确的图像匹配
+                    import cv2
+                    import numpy as np
+                    
+                    # 读取图像
+                    template = cv2.imread(local_picture_path)
+                    screenshot = cv2.imread(temp_screenshot_path)
+                    
+                    # 清理临时文件
+                    try:
+                        os.remove(temp_screenshot_path)
+                    except:
+                        pass
+                    
+                    if template is None or screenshot is None:
+                        logger.error("无法读取图像文件")
+                        return False
+                    
+                    # 执行模板匹配
+                    result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+                    # 设置匹配阈值
+                    if max_val >= confidence:
+                        logger.info(f"图片匹配成功，相似度: {max_val:.2f}")
+                        # 根据鼠标动作类型执行相应操作
+                        if image_action.mouse_action == 0:
+                            # 无动作
+                            return True
+                        elif image_action.mouse_action == 1:
+                            # 左击
+                            pyautogui.click(pyautogui.locateCenterOnScreen(local_picture_path))
+                            return True
+                        elif image_action.mouse_action == 2:
+                            # 右击
+                            pyautogui.rightClick(pyautogui.locateCenterOnScreen(local_picture_path))
+                            return True
+                        elif image_action.mouse_action == 3:
+                            # 左键按下
+                            pyautogui.mouseDown(pyautogui.locateCenterOnScreen(local_picture_path),button='left')
+                            return True
+                        elif image_action.mouse_action == 4:
+                            # 右键按下
+                            pyautogui.mouseDown(pyautogui.locateCenterOnScreen(local_picture_path),button='right')
+                            return True
+                        elif image_action.mouse_action == 5:
+                            # 左键释放
+                            pyautogui.mouseUp(pyautogui.locateCenterOnScreen(local_picture_path),button='left')
+                            return True
+                        elif image_action.mouse_action == 6:
+                            # 右键释放
+                            pyautogui.mouseUp(pyautogui.locateCenterOnScreen(local_picture_path),button='right')
+                            return True
+                        elif image_action.mouse_action == 7:
+                            # 滚轮动作
+                            pyautogui.scroll(image_action.mouse_size)
+                            return True
+                        else:
+                            return True
+                    else:
+                        logger.warning(f"图片匹配失败，相似度: {max_val:.2f}")
+                        return False
+                        
+                except Exception as e:
+                    logger.error(f"图像匹配失败: {e}")
+                    return False
+            # 如果image_action.match_text不为空，则开始执行匹配文本
+            if image_action.match_text:
+                # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
+                config = ConfigManager()
+                local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
+                # 开始执行匹配文本
+                try:
+                    import easyocr
+                    reader = easyocr.Reader(['chinese_simp', 'english'])
+                    result = reader.readtext(get_picture)
+                    
+                    if result:
+                        for item in result:
+                            if item[1] == image_action.match_text:
+                                # 计算文本区域坐标
+                                bbox = item[0]
+                                x_min = min(point[0] for point in bbox)
+                                y_min = min(point[1] for point in bbox)
+                                x_max = max(point[0] for point in bbox)
+                                y_max = max(point[1] for point in bbox)
+                                return (x_min, y_min, x_max, y_max)
+                    return False
+                except Exception as e:
+                    logger.error(f"文本识别失败: {e}")
+                    return False
+            return True
+        except Exception as e:
+            print(f"Error in run_image_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_code_action(self, action_id):
+        """执行代码动作"""
+        session = self._get_session(True)
+        if not session:
+            return False
+            
+        try:
+            # 获取代码行为列表
+            code_action = session.query(ActionCodeTxt).filter_by(action_list_id=action_id).first()
+            if not code_action:
+                logger.error(f"代码动作列表不存在: {action_id}")
+                return False
+            #如果code_action.time_diff为空，则不等待
+            if code_action.time_diff:
+                time.sleep(code_action.time_diff)
+            # 执行代码文本
+            # 这里可以添加代码执行逻辑
+            return True
+        except Exception as e:
+            print(f"Error in run_code_action: {e}")
+            print(traceback.format_exc())
+            return False
+
+    def run_function_action(self, action_id):
+        """执行函数动作"""
+        session = self._get_session(True)
+        if not session:
+            return False
+            
+        try:
+            # 获取函数行为列表
+            function_action = session.query(ActionFunction).filter_by(action_list_id=action_id).first()
+            if not function_action:
+                logger.error(f"函数动作列表不存在: {action_id}")
+                return False
+            #如果function_action.time_diff为空，则不等待
+            if function_action.time_diff:
+                time.sleep(function_action.time_diff)
+            # 执行函数
+            # 这里可以添加函数执行逻辑
+            return True
+        except Exception as e:
+            print(f"Error in run_function_action: {e}")
+            print(traceback.format_exc())
+            return False
 class ActionManager:
     """行为元管理器，用于处理middle_panel中行为元相关的按钮功能"""
     
@@ -564,8 +1112,10 @@ class ActionManager:
             
             if self.home_tab.action_operation_type == 1:
                 # 新增保存,不涉及保存列表层级，因为列表层级保存在ActionManager中已经被实现
+                list_type = self.home_tab.action_type_var.get()
+                target_list_rank = self._get_new_list_rank(self.home_tab.current_action_list_selected_rank,list_type)
                 action_list = ActionList(
-                    list_rank=self.home_tab.current_action_list_selected_rank,
+                    list_rank=target_list_rank,
                     group_id=self.home_tab.action_group_id,
                     action_type=self.home_tab.action_type_var.get(),
                     action_name=self.home_tab.action_name_var.get().strip(),
@@ -638,7 +1188,21 @@ class ActionManager:
         finally:
             if session:
                 session.close()
-    
+    def _get_new_list_rank(self,current_list_rank,current_list_iid,list_type)->str:
+        """获取下一个列表层级"""
+        _current_list_rank = current_list_rank
+        _current_list_iid = current_list_iid
+        _list_type = list_type
+        _session = self._get_session()
+        max_list_node = 0
+        max_list_sort = 0
+        if _list_type == "hierarchy_list":
+            groups = _session.query(ActionList).filter(ActionList.list_rank.like(_current_list_rank_pro + "%")).all(groups.list_rank[-2:])
+            return _current_list_rank
+        else:
+            _current_list_rank_pro = _current_list_iid[:-2]
+            _current_list_rank_next = _current_list_rank + "0"
+            return current_list_rank
     def _set_action_controls_state(self, state):
         """设置行为元控件状态"""
         for ctrl in [
@@ -736,32 +1300,7 @@ class ActionManager:
         # 这个方法需要调用home_tab中的_on_action_type_changed方法
         if hasattr(self.home_tab, '_on_action_type_changed'):
             self.home_tab._on_action_type_changed()
-    
-    def _refresh_action_list(self):
-        """刷新行为列表"""
-        if not self.home_tab.action_group_id:
-            return
-            
-        try:
-            # 清空行为列表
-            self.home_tab.action_list.delete(*self.home_tab.action_list.get_children())
-            
-            # 从数据库获取行为列表
-            session = self._get_session()
-            if not session:
-                return
-                
-            actions = session.query(ActionList).filter_by(group_id=self.home_tab.action_group_id).all()
-            for action in actions:
-                self.home_tab.action_list.insert("", "end", iid=str(action.id), values=(
-                    action.id, action.action_type, action.action_name, action.next_id
-                ))
-                
-            session.close()
-        except Exception as e:
-            print(traceback.format_exc())
-            self.logger.error(f"刷新行为列表失败: {str(e)}")
-    
+        
     def _on_debug_action_list_select(self, event):
         """调试行为列表选择事件处理"""
         selected = self.home_tab.action_debug_list.selection()
@@ -848,15 +1387,17 @@ class ActionManager:
             session.close()
         except Exception as e:
             self.logger.error(f"Error in _on_debug_action_list_select: {e}")
-    def _get_action_list_rank(self,hierarchy_id):
+    def _get_action_list_rank(self,list_id):
         """获取行为列表的等级"""
         session = self._get_session()
         if not session:
             return
-        hierarchy = session.query(ActionList).filter_by(id=hierarchy_id).first()
-        if hierarchy:
-            return hierarchy.list_rank
+        list = session.query(ActionList).filter_by(id=list_id).first()
+        if list:
+            session.close()
+            return list.list_rank
         else:
+            session.close()
             return None
     
     def _fill_action_data(self, action_type, action_id,current_action_list_hierarchy_id):
@@ -1378,7 +1919,7 @@ class ActionGroupManager:
             else:
                 logger.info(f"匹配失败 - 期望类名: {class_action.class_name}, 窗口标题: {class_action.windows_title}")
 
-    def get_action_group_data(self, sheet_name,group_id):
+    def get_action_group_data(self, sheet_name,hierarchy_id):
         """action专有的方法。获取行为组数据,sheet_name为ActionGroup或ActionsDebugGroup或ActionsSuitGroup。group_id为行为组id。"""
         # 首先检查session是否有效
         if not self.is_session_valid():
@@ -1393,38 +1934,52 @@ class ActionGroupManager:
         try:
             if sheet_name == "ActionGroup":
                 # 获取行为组
-                group = session.query(ActionGroup).filter_by(id=group_id).first()
+                hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=hierarchy_id).first()
                 # 获取关联的层级信息
-                if group:
-                    hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                if hierarchy:
+                    group = session.query(ActionGroup).filter_by(group_rank_id=hierarchy.id).first()
+                    if group:
+                        actions = session.query(ActionList).filter_by(group_id=group.id).all()
+                    else:
+                        actions = None
                 else:
-                    hierarchy = None
+                    group = None
+                    actions = None
                 # 获取行为列表
-                actions = session.query(ActionList).filter_by(group_id=group_id).all()
             elif sheet_name == "ActionsDebugGroup":
                 # 获取行为组
-                group = session.query(ActionGroup).filter_by(id=group_id).first()
+                hierarchy = session.query(ActionsDebugGroupHierarchy).filter_by(id=hierarchy_id).first()
                 # 获取关联的层级信息
-                if group:
-                    hierarchy = session.query(ActionsGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                if hierarchy:
+                    group = session.query(ActionsDebugGroup).filter_by(group_rank_id=hierarchy.id).first()
+                    if group: 
+                        actions = session.query(ActionDebugList).filter_by(group_id=group.id).all()
+                    else:
+                        actions = None
                 else:
-                    hierarchy = None
+                    group = None
+                    actions = None
                 # 获取行为列表
-                actions = session.query(ActionList).filter_by(group_id=group_id).all()
             elif sheet_name == "ActionsSuitGroup":
                 # 获取行为组
-                group = session.query(ActionsSuitGroup).filter_by(id=group_id).first()
+                hierarchy = session.query(ActionsSuitGroupHierarchy).filter_by(id=hierarchy_id).first()
                 # 获取关联的层级信息
-                if group:
-                    hierarchy = session.query(ActionsSuitGroupHierarchy).filter_by(id=group.group_rank_id).first()
+                if hierarchy:
+                    group = session.query(ActionsSuitGroup).filter_by(group_rank_id=hierarchy.id).first()
+                    if group:
+                        actions = session.query(ActionSuitList).filter_by(group_id=group.id).all()
+                    else:
+                        actions = None
                 else:
-                    hierarchy = None
+                    group = None
+                    actions = None
                 # 获取行为列表
-                actions = session.query(ActionList).filter_by(group_id=group_id).all()
-            if not group:
+            else:
+                return None
+            if not hierarchy:
                 return None
             # 获取用户信息
-            user = session.query(User).filter_by(user_id=group.user_id).first()
+            user = session.query(User).filter_by(user_id=globalvariable.USER_ID).first()
             return {
                 'group': group,
                 'hierarchy': hierarchy,
@@ -1570,432 +2125,6 @@ class ActionGroupManager:
         except Exception as e:
             print(f"Error getting all action groups: {e}")
             return []
-    def run_action_group(self, group_id):
-        """运行行为组"""
-        self.group_id = group_id
-        session = self._get_session(True)
-        self.excel_value = None
-        if not session:
-            return False
-        
-        try:
-            group = session.query(ActionGroup).filter_by(id=group_id).first()
-            if not group:
-                return False
-            # 判断行为组中的excel_name、excel_sheet_num、excel_column是否为空
-            if group.excel_name and group.excel_sheet_num and group.excel_column:
-                # 读取excel文件
-                excel_file = group.excel_name
-                excel_sheet_num = group.excel_sheet_num
-                excel_column = group.excel_column
-                # 读取excel文件
-                excel_data = pd.read_excel(excel_file, sheet_name=excel_sheet_num)
-                # 获取excel文件的列
-                excel_column_data = excel_data[excel_column]
-                # 开始执行循环，直到excel_column_data.iloc[0]为空
-                excel_loop_result = True
-                while excel_column_data.iloc[0] is not None and excel_loop_result:
-                    # 获取excel文件的值
-                    self.excel_value = excel_column_data.iloc[0]
-                    excel_loop_result = self.run_action(self.excel_value)
-                    if excel_loop_result:
-                        # 如果excel_loop_result为True，则在excel_column的下一列中输入"OK"
-                        excel_column_data.iloc[1] = "OK"
-                        continue
-                    else:
-                        # 如果excel_loop_result为False，则在excel_column的下一列中输入"NG"
-                        excel_column_data.iloc[1] = "NG"
-                        continue
-            else:
-                ls_result = self.run_action(self.group_id)
-                if not ls_result:
-                    return False
-            #弹窗提示任务完成
-            return True
-        except Exception as e:
-            self._close_session()
-            print(f"Error running action group: {e}")
-            print(traceback.format_exc())
-            return False
-
-    def run_action(self, excel_value):
-        """执行行为列表"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取行为列表
-            actions = session.query(ActionList).filter_by(group_id=self.group_id).all()  
-            if not actions:
-                return False
-            action_loop_result = True
-            #开始执行actions中的action,如果action.next_action_id为空，则下一个action按照顺序执行；如果action.next_action_id不为空，则跳转到next_action_id的action执行。
-            # 创建一个索引来跟踪当前执行的action
-            current_index = 0
-            while current_index < len(actions):
-                action = actions[current_index]
-                
-                # 根据action_type执行相应的操作
-                if action.action_type == 'mouse':
-                    action_loop_result = self.run_mouse_action(action.id)
-                    logger.info(f"{action.action_name}:鼠标动作执行结果: {action_loop_result}")
-                elif action.action_type == 'keyboard':
-                    action_loop_result = self.run_keyboard_action(action.id)
-                    logger.info(f"{action.action_name}:键盘动作执行结果: {action_loop_result}")
-                elif action.action_type == 'code':
-                    action_loop_result = self.run_code_action(action.id)
-                    logger.info(f"{action.action_name}:代码动作执行结果: {action_loop_result}")
-                elif action.action_type == 'class':
-                    action_loop_result = self.run_class_action(action.id)
-                    logger.info(f"{action.action_name}:类动作执行结果: {action_loop_result}")
-                elif action.action_type == 'AI':
-                    action_loop_result = self.run_AI_action(action.id)
-                    logger.info(f"{action.action_name}:AI动作执行结果: {action_loop_result}")
-                elif action.action_type == 'image':
-                    action_loop_result = self.run_image_action(action.id)
-                    logger.info(f"{action.action_name}:图像动作执行结果: {action_loop_result}")
-                elif action.action_type == 'function':
-                    action_loop_result = self.run_function_action(action.id)
-                    logger.info(f"{action.action_name}:函数动作执行结果: {action_loop_result}")
-                else:
-                    return False
-                
-                # 检查执行结果
-                if not action_loop_result:
-                    return False
-                
-                # 处理下一个action
-                if action.next_id and action.next_id != 'None':
-                    # 如果有指定的下一个action_id，查找对应的action
-                    next_action = session.query(ActionList).filter_by(id=action.next_id).first()
-                    if not next_action:
-                        return False
-                    current_index = action.next_id
-                else:
-                    # 如果没有指定next_action_id，则按顺序执行下一个
-                    current_index += 1
-            
-            return True
-        except Exception as e:
-            print(f"Error in run_action: {e}")
-            return False
-
-    def run_mouse_action(self, action_id):
-        """执行鼠标动作"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取鼠标行为列表
-            mouse_action = session.query(ActionMouse).filter_by(action_list_id=action_id).first()
-            if not mouse_action:
-                logger.error(f"鼠标动作列表不存在: {action_id}")
-                return False
-            #如果mouse_action.time_diff为空，则不等待
-            if mouse_action.time_diff:
-                time.sleep(mouse_action.time_diff)
-            # 鼠标动作(1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
-            # 开始执行mouse_action
-            if mouse_action.mouse_action == 1:
-                # 开始执行click_action
-                pyautogui.click(mouse_action.x,mouse_action.y)
-                return True
-            elif mouse_action.mouse_action == 2:
-                # 开始执行右击
-                pyautogui.rightClick(mouse_action.x,mouse_action.y)
-                return True
-            elif mouse_action.mouse_action == 3:
-                # 开始执行左键按下
-                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='left')
-                return True
-            elif mouse_action.mouse_action == 4:
-                # 开始执行右键按下
-                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='right')
-                return True
-            elif mouse_action.mouse_action == 5:
-                # 开始执行左键释放
-                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='left')
-                return True
-            elif mouse_action.mouse_action == 6:
-                # 开始执行右键释放
-                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='right')
-                return True
-            elif mouse_action.mouse_action == 7:
-                # 开始执行滚轮动作
-                pyautogui.scroll(mouse_action.mouse_size)
-                return True
-            else:
-                return False
-        except Exception as e:
-            print(f"Error in run_mouse_action: {e}")
-            print(traceback.format_exc())
-            return False
-
-    def run_keyboard_action(self, action_id):
-        """执行键盘动作"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取键盘行为列表
-            keyboard_action = session.query(ActionKeyboard).filter_by(action_list_id=action_id).first()
-            if not keyboard_action:
-                logger.error(f"键盘动作列表不存在: {action_id}")
-                return False
-            #如果keyboard_action.time_diff为空，则不等待
-            if keyboard_action.time_diff:
-                time.sleep(keyboard_action.time_diff)
-            # 键盘类型(1:按下,2:释放,3:单击,4:文本)
-            if keyboard_action.keyboard_type == 1:
-                # 开始执行按下
-                pyautogui.keyDown(keyboard_action.keyboard_value)
-                return True
-            elif keyboard_action.keyboard_type == 2:
-                # 开始执行释放
-                pyautogui.keyUp(keyboard_action.keyboard_value)
-                return True
-            elif keyboard_action.keyboard_type == 3:
-                # 开始执行单击
-                pyautogui.press(keyboard_action.keyboard_value)
-                return True
-            elif keyboard_action.keyboard_type == 4:
-                # 开始执行文本
-                pyautogui.write(keyboard_action.keyboard_value)
-                return True
-            else:
-                return False
-        except Exception as e:
-            print(f"Error in run_keyboard_action: {e}")
-            print(traceback.format_exc())
-            return False
-
-    def run_class_action(self, action_id):
-        """执行类动作"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取类行为列表
-            class_action = session.query(ActionClass).filter_by(action_list_id=action_id).first()
-            if not class_action:
-                logger.error(f"类动作列表不存在: {action_id}")
-                return False
-            #如果class_action.time_diff为空，则不等待
-            if class_action.time_diff:
-                time.sleep(class_action.time_diff)
-            # 获取当前鼠标所在的位置所在的应用的类名，然后与class_action.class_name进行匹配
-            if self.get_current_class(class_action):
-                return True
-            else:
-                return False
-        except Exception as e:
-            print(f"Error in run_class_action: {e}")
-            return False
-
-    def run_AI_action(self, action_id):
-        """执行AI动作"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取AI行为列表
-            AI_action = session.query(ActionAI).filter_by(action_list_id=action_id).first()
-            if not AI_action:
-                logger.error(f"AI动作列表不存在: {action_id}")
-                return False
-            #如果AI_action.time_diff为空，则不等待
-            if AI_action.time_diff:
-                time.sleep(AI_action.time_diff)
-            # 待完善
-            return False
-        except Exception as e:
-            print(f"Error in run_AI_action: {e}")
-            print(traceback.format_exc())
-            return False
-
-    def run_image_action(self, action_id):
-        """执行图像动作"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取图像行为列表
-            image_action = session.query(ActionPrintscreen).filter_by(action_list_id=action_id).first()
-            if not image_action:
-                logger.error(f"图像动作列表不存在: {action_id}")
-                return False
-            #如果image_action.time_diff为空，则不等待
-            if image_action.time_diff:
-                time.sleep(image_action.time_diff)
-            # 开始执行截屏
-            get_picture = pyautogui.screenshot(region=(image_action.lux,image_action.luy,image_action.rdx,image_action.rdy))
-            # 如果image_action.match_picture_name不为空，则开始执行匹配图片
-            if image_action.match_picture_name:
-                # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
-                config = ConfigManager()
-                local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
-                # 开始执行截图与本地图片匹配，如果匹配到，则开始执行鼠标动作
-                try:
-                    # 检查本地图片是否存在
-                    if not os.path.exists(local_picture_path):
-                        logger.error(f"本地匹配图片不存在: {local_picture_path}")
-                        return False
-                    
-                    # 保存当前截图到临时文件用于匹配
-                    temp_screenshot_path = os.path.join(os.path.dirname(local_picture_path), f"temp_screenshot_{int(time.time())}.png")
-                    get_picture.save(temp_screenshot_path)
-                    
-                    logger.info(f"开始匹配图片: {image_action.match_picture_name}")
-                    # 设置匹配置信度阈值
-                    confidence = 0.8  # 可以根据需要调整匹配精度
-                    
-                    # 使用OpenCV进行更精确的图像匹配
-                    import cv2
-                    import numpy as np
-                    
-                    # 读取图像
-                    template = cv2.imread(local_picture_path)
-                    screenshot = cv2.imread(temp_screenshot_path)
-                    
-                    # 清理临时文件
-                    try:
-                        os.remove(temp_screenshot_path)
-                    except:
-                        pass
-                    
-                    if template is None or screenshot is None:
-                        logger.error("无法读取图像文件")
-                        return False
-                    
-                    # 执行模板匹配
-                    result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
-                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                    # 设置匹配阈值
-                    if max_val >= confidence:
-                        logger.info(f"图片匹配成功，相似度: {max_val:.2f}")
-                        # 根据鼠标动作类型执行相应操作
-                        if image_action.mouse_action == 0:
-                            # 无动作
-                            return True
-                        elif image_action.mouse_action == 1:
-                            # 左击
-                            pyautogui.click(pyautogui.locateCenterOnScreen(local_picture_path))
-                            return True
-                        elif image_action.mouse_action == 2:
-                            # 右击
-                            pyautogui.rightClick(pyautogui.locateCenterOnScreen(local_picture_path))
-                            return True
-                        elif image_action.mouse_action == 3:
-                            # 左键按下
-                            pyautogui.mouseDown(pyautogui.locateCenterOnScreen(local_picture_path),button='left')
-                            return True
-                        elif image_action.mouse_action == 4:
-                            # 右键按下
-                            pyautogui.mouseDown(pyautogui.locateCenterOnScreen(local_picture_path),button='right')
-                            return True
-                        elif image_action.mouse_action == 5:
-                            # 左键释放
-                            pyautogui.mouseUp(pyautogui.locateCenterOnScreen(local_picture_path),button='left')
-                            return True
-                        elif image_action.mouse_action == 6:
-                            # 右键释放
-                            pyautogui.mouseUp(pyautogui.locateCenterOnScreen(local_picture_path),button='right')
-                            return True
-                        elif image_action.mouse_action == 7:
-                            # 滚轮动作
-                            pyautogui.scroll(image_action.mouse_size)
-                            return True
-                        else:
-                            return True
-                    else:
-                        logger.warning(f"图片匹配失败，相似度: {max_val:.2f}")
-                        return False
-                        
-                except Exception as e:
-                    logger.error(f"图像匹配失败: {e}")
-                    return False
-            # 如果image_action.match_text不为空，则开始执行匹配文本
-            if image_action.match_text:
-                # 先获取本地图片路径，本地图片路径为系统配置文件中sysfolder的值+Action_group+{user_id}+picture
-                config = ConfigManager()
-                local_picture_path = os.path.join(config.get_value('System', 'SysFolder'), r'\Action_group\{}\picture\{}'.format(globalvariable.USER_ID, image_action.match_picture_name))
-                # 开始执行匹配文本
-                try:
-                    import easyocr
-                    reader = easyocr.Reader(['chinese_simp', 'english'])
-                    result = reader.readtext(get_picture)
-                    
-                    if result:
-                        for item in result:
-                            if item[1] == image_action.match_text:
-                                # 计算文本区域坐标
-                                bbox = item[0]
-                                x_min = min(point[0] for point in bbox)
-                                y_min = min(point[1] for point in bbox)
-                                x_max = max(point[0] for point in bbox)
-                                y_max = max(point[1] for point in bbox)
-                                return (x_min, y_min, x_max, y_max)
-                    return False
-                except Exception as e:
-                    logger.error(f"文本识别失败: {e}")
-                    return False
-            return True
-        except Exception as e:
-            print(f"Error in run_image_action: {e}")
-            print(traceback.format_exc())
-            return False
-
-    def run_code_action(self, action_id):
-        """执行代码动作"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取代码行为列表
-            code_action = session.query(ActionCodeTxt).filter_by(action_list_id=action_id).first()
-            if not code_action:
-                logger.error(f"代码动作列表不存在: {action_id}")
-                return False
-            #如果code_action.time_diff为空，则不等待
-            if code_action.time_diff:
-                time.sleep(code_action.time_diff)
-            # 执行代码文本
-            # 这里可以添加代码执行逻辑
-            return True
-        except Exception as e:
-            print(f"Error in run_code_action: {e}")
-            print(traceback.format_exc())
-            return False
-
-    def run_function_action(self, action_id):
-        """执行函数动作"""
-        session = self._get_session(True)
-        if not session:
-            return False
-            
-        try:
-            # 获取函数行为列表
-            function_action = session.query(ActionFunction).filter_by(action_list_id=action_id).first()
-            if not function_action:
-                logger.error(f"函数动作列表不存在: {action_id}")
-                return False
-            #如果function_action.time_diff为空，则不等待
-            if function_action.time_diff:
-                time.sleep(function_action.time_diff)
-            # 执行函数
-            # 这里可以添加函数执行逻辑
-            return True
-        except Exception as e:
-            print(f"Error in run_function_action: {e}")
-            print(traceback.format_exc())
-            return False
 
     def build_tree_structure(self, hierarchies):
         """构建树形结构数据"""

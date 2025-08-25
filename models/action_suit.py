@@ -204,7 +204,7 @@ class ActionSuitList(BaseModel):
     group_id = Column(Integer,ForeignKey('actions_suit_group.id'))  # 行为组的编号
     action_type = Column(String(50), nullable=False)  # 行为类型
     list_rank = Column(String(50))  # 组级别
-    action_sort_num = Column(Integer)  # 行为排序编码
+    sort_num = Column(Integer)  # 行为排序编码
     action_name = Column(String(200))  # 行为名称
     next_id = Column(Integer)  # 下一步ID
     debug_group_id = Column(Integer)  # Debug调试用ID
