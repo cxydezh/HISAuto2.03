@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from functools import wraps
 import json
-from NetworkUtils.data_display import get_ai_suit_list, get_ai_workflow_by_func_list_id, get_departments, get_patient_ai_result, get_patients_by_department, get_patient_info, get_ai_functions, get_ai_workflow
+from NetworkUtils.data_display import get_ai_suit_list, get_ai_workflow_by_func_list_id, get_departments, get_patient_ai_result, get_ai_functions, get_ai_workflow, get_ai_hierarchy_list, get_ai_actions_by_group_id
 from NetworkUtils.database import db
 from main import handle_login
 
@@ -66,17 +66,9 @@ def api_departments():
     departments = get_departments()
     return jsonify(departments)
 
-@app.route('/api/patients/<department>')
-@login_required
-def api_patients(department):
-    patients = get_patients_by_department(department)
-    return jsonify(patients)
-
-@app.route('/api/patient/<patient_id>')
-@login_required
-def api_patient_info(patient_id):
-    patient_info = get_patient_info(patient_id)
-    return jsonify(patient_info)
+# 患者数据现在由前端通过Excel文件导入，不再需要后端API
+# @app.route('/api/patients/<department>') 已删除
+# @app.route('/api/patient/<patient_id>') 已删除
 
 @app.route('/api/ai-functions')
 @login_required
@@ -111,9 +103,9 @@ def api_run_ai():
     if not workflow:
         return jsonify({'success': False, 'message': '未找到指定的AI功能'})
     
-    # 获取患者信息
-    patient_info = get_patient_info(patient_id) if patient_id else None
-    patient_name = patient_info['name'] if patient_info else '未知患者'
+    # 患者信息现在由前端管理，不再从服务器获取
+    # 如果前端传递了患者信息，可以使用，否则使用默认值
+    patient_name = data.get('patient_name', '未知患者')
     patient_ai_result = get_patient_ai_result(patient_id,func_list_id)
     # 生成模拟的运行结果
     if patient_ai_result:
@@ -169,6 +161,38 @@ def api_ai_result_detail(result_id):
         return jsonify(result)
     else:
         return jsonify({'error': '未找到指定的运行结果'}), 404
+
+@app.route('/api/ai-hierarchy-list/<suit_type>')
+@login_required
+def api_ai_hierarchy_list(suit_type):
+    """获取AI功能列表（从actions_group_hierarchy表）
+    
+    suit_type: 'personal'（个人）、'department'（科室）、'global'（全局）
+    """
+    try:
+        result_list = get_ai_hierarchy_list(suit_type)
+        return jsonify(result_list)
+    except Exception as e:
+        print(f"获取AI功能列表时出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ai-actions/<group_id>')
+@login_required
+def api_ai_actions(group_id):
+    """获取指定行为组下所有 action_type 为 'AI' 的记录
+    
+    group_id: 行为组ID
+    """
+    try:
+        result_list = get_ai_actions_by_group_id(int(group_id))
+        return jsonify(result_list)
+    except Exception as e:
+        print(f"获取AI动作列表时出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001) 

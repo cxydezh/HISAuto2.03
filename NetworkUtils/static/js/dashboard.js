@@ -16,14 +16,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 科室选择
+    // 更新Excel文件按钮
+    document.getElementById('update-excel-btn').addEventListener('click', function() {
+        updateExcelFile();
+    });
+
+    // 科室选择（已禁用后端加载，改为本地数据过滤）
     document.getElementById('department-select').addEventListener('change', function() {
-        loadPatientsByDepartment(this.value);
+        // 如果需要按科室过滤，可以在这里实现
+        // 目前所有患者数据都在本地，可以直接渲染
+        if (window.patientData && window.patientData.length > 0) {
+            renderPatientList(window.patientData);
+        }
     });
 
     // AI功能选择
     document.getElementById('ai-selection').addEventListener('change', function() {
-        loadAiFuncList(this.value);
+        const suitType = this.value;
+        if (suitType === 'personal' || suitType === 'department' || suitType === 'global') {
+            loadAiFuncList(suitType);
+        } else {
+            document.getElementById('ai-tree').innerHTML = '';
+            document.getElementById('ai-description-content').innerHTML = '<p class="placeholder-text">请选择AI功能查看详细描述</p>';
+        }
     });
 
     // 运行AI按钮
@@ -45,12 +60,171 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById(`${panelName}-panel`).classList.add('active');
     }
 
-    function loadPatientsByDepartment(department) {
-        fetch(`/api/patients/${department}`)
-            .then(response => response.json())
-            .then(data => {
-                renderPatientList(data);
-            });
+    // 前端患者数据存储
+    window.patientData = [];
+
+    // 更新Excel文件函数（在DOMContentLoaded内部定义，通过事件监听器调用）
+    function updateExcelFile() {
+        // 触发文件选择
+        const fileInput = document.getElementById('excel-file-input');
+        if (!fileInput) {
+            console.error('找不到文件输入框');
+            return;
+        }
+        
+        // 清除之前的事件监听器，避免重复绑定
+        fileInput.onchange = null;
+        
+        // 设置新的文件选择处理函数
+        fileInput.onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) {
+                return;
+            }
+            
+            // 检查文件类型
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                alert('请选择Excel文件（.xlsx或.xls格式）');
+                // 重置文件输入
+                fileInput.value = '';
+                return;
+            }
+            
+            // 读取Excel文件
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    // 获取第一个工作表
+                    if (workbook.SheetNames.length === 0) {
+                        alert('Excel文件没有工作表');
+                        return;
+                    }
+                    
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // 转换为JSON格式
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+                    
+                    if (jsonData.length === 0) {
+                        alert('Excel文件为空，没有数据可导入');
+                        return;
+                    }
+                    
+                    // 处理Excel数据，转换为患者列表格式
+                    const patients = processExcelData(jsonData);
+                    
+                    if (patients.length === 0) {
+                        alert('Excel文件中没有有效的患者数据');
+                        return;
+                    }
+                    
+                    // 更新前端患者数据
+                    window.patientData = patients;
+                    
+                    // 渲染患者列表
+                    renderPatientList(patients);
+                    
+                    alert(`成功导入 ${patients.length} 条患者数据`);
+                } catch (error) {
+                    console.error('读取Excel文件失败:', error);
+                    alert('读取Excel文件失败，请检查文件格式是否正确：' + error.message);
+                } finally {
+                    // 重置文件输入，允许重复选择同一文件
+                    fileInput.value = '';
+                }
+            };
+            
+            reader.onerror = function(e) {
+                console.error('文件读取错误:', e);
+                alert('文件读取失败，请重试');
+                fileInput.value = '';
+            };
+            
+            reader.readAsArrayBuffer(file);
+        };
+        
+        // 触发文件选择对话框
+        fileInput.click();
+    }
+    
+    function processExcelData(jsonData) {
+        // 将Excel数据转换为患者列表格式
+        const patients = [];
+        
+        jsonData.forEach((row, index) => {
+            // 尝试识别不同的列名格式
+            const patientId = row['patient_id'] || row['Patient ID'] || row['病历号'] || row['id'] || row['ID'] || '';
+            const patientName = row['patient_name'] || row['Patient Name'] || row['患者姓名'] || row['name'] || row['姓名'] || '';
+            const admissionDate = row['in_hospital_time'] || row['In Hospital Time'] || row['入院时间'] || row['入院日期'] || row['admission_date'] || '';
+            
+            // 如果缺少关键信息，跳过该行
+            if (!patientId && !patientName) {
+                console.warn(`第 ${index + 2} 行缺少患者ID和姓名，跳过`);
+                return;
+            }
+            
+            const patient = {
+                id: String(patientId || `TEMP_${index}`),
+                name: String(patientName || '未知'),
+                admission_date: formatExcelDate(admissionDate) || new Date().toLocaleDateString('zh-CN'),
+                age: row['patient_age'] || row['Patient Age'] || row['年龄'] || row['age'] || '',
+                gender: row['patient_gender'] || row['Patient Gender'] || row['性别'] || row['gender'] || '',
+                department: row['patient_department'] || row['Patient Department'] || row['科室'] || row['department'] || '',
+                bed_num: row['patient_bed_num'] || row['Patient Bed Number'] || row['床号'] || row['bed_num'] || '',
+                attending_doctor: row['attending_doctor_id'] || row['Attending Doctor'] || row['主治医生'] || '',
+                resident_doctor: row['fellow_doctor_id'] || row['Fellow Doctor'] || row['住院医生'] || '',
+                chief_doctor: row['resistant_doctor_id'] || row['Resistant Doctor'] || row['实习医生'] || '',
+                notes: row['patient_note'] || row['Patient Note'] || row['备注'] || row['note'] || ''
+            };
+            
+            patients.push(patient);
+        });
+        
+        return patients;
+    }
+    
+    function formatExcelDate(dateValue) {
+        if (!dateValue) {
+            return '';
+        }
+        
+        // 如果是日期对象
+        if (dateValue instanceof Date) {
+            return dateValue.toLocaleDateString('zh-CN');
+        }
+        
+        // 如果是数字（Excel日期序列号）
+        if (typeof dateValue === 'number') {
+            // Excel日期从1900年1月1日开始
+            const excelEpoch = new Date(1899, 11, 30);
+            const date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000);
+            return date.toLocaleDateString('zh-CN');
+        }
+        
+        // 如果是字符串，尝试解析
+        if (typeof dateValue === 'string') {
+            // 尝试多种日期格式
+            const dateFormats = [
+                /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,
+                /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/
+            ];
+            
+            for (const format of dateFormats) {
+                const match = dateValue.match(format);
+                if (match) {
+                    const year = match[1].length === 4 ? match[1] : match[3];
+                    const month = match[1].length === 4 ? match[2] : match[1];
+                    const day = match[1].length === 4 ? match[3] : match[2];
+                    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
+            }
+        }
+        
+        return String(dateValue);
     }
 
     function loadAiFunctions1() {
@@ -68,6 +242,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 renderAiSuitLists(data);
+                // 默认加载"个人"功能列表
+                loadAiFuncList('personal');
             })
             .catch(error => {
                 console.error('加载AI功能失败:', error);
@@ -75,14 +251,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     function renderAiSuitLists(suit_list) {
         const select = document.getElementById('ai-selection');
-        select.innerHTML = '<option value="">请选择AI功能</option>';
+        select.innerHTML = '<option value="">请选择AI功能类型</option>';
+        
+        // 将中文转换为对应的英文值
+        const suitTypeMap = {
+            '个人': 'personal',
+            '科室': 'department',
+            '全局': 'global'
+        };
         
         suit_list.forEach(suit => {
             const option = document.createElement('option');
-            option.value = suit;
+            option.value = suitTypeMap[suit] || suit;
             option.textContent = suit;
             select.appendChild(option);
         });
+        
+        // 默认选中"个人"
+        const personalOption = select.querySelector('option[value="personal"]');
+        if (personalOption) {
+            personalOption.selected = true;
+        }
     }
             
     function renderAiFunctions1(functions) {
@@ -129,16 +318,18 @@ document.addEventListener('DOMContentLoaded', function() {
             row.classList.remove('selected');
         });
         event.target.closest('tr').classList.add('selected');
-        loadPatientInfo(patient.id);
+        
+        // 从本地数据中获取患者信息，不再从服务器加载
+        loadPatientInfo(patient);
         loadPatientAiResults(patient.id);
+        
+        // 获取当前选中的AI功能的行为组ID，并加载AI提示词列表
+        loadAiPromptTable(patient);
     }
 
-    function loadPatientInfo(patientId) {
-        fetch(`/api/patient/${patientId}`)
-            .then(response => response.json())
-            .then(data => {
-                renderPatientInfo(data);
-            });
+    function loadPatientInfo(patient) {
+        // 直接使用传入的患者对象，不再从服务器获取
+        renderPatientInfo(patient);
     }
 
     function loadPatientAiResults(patientId) {
@@ -299,78 +490,140 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderPatientInfo(patient) {
         const infoContainer = document.getElementById('patient-info');
+        
+        // 计算入院天数（如果有入院日期）
+        let admissionDays = '';
+        if (patient.admission_date) {
+            try {
+                const admissionDate = new Date(patient.admission_date);
+                const today = new Date();
+                const diffTime = Math.abs(today - admissionDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                admissionDays = diffDays;
+            } catch (e) {
+                admissionDays = '';
+            }
+        }
+        
         infoContainer.innerHTML = `
             <div class="patient-details">
                 <h3>患者基本信息</h3>
                 <div class="info-grid">
-                    <div class="info-item"><label>患者姓名:</label><span>${patient.name}</span></div>
-                    <div class="info-item"><label>年龄:</label><span>${patient.age}岁</span></div>
-                    <div class="info-item"><label>性别:</label><span>${patient.gender}</span></div>
-                    <div class="info-item"><label>入院科室:</label><span>${patient.department}</span></div>
-                    <div class="info-item"><label>入院时间:</label><span>${patient.admission_date}</span></div>
-                    <div class="info-item"><label>入院天数:</label><span>${patient.admission_days}天</span></div>
-                    <div class="info-item"><label>主管医生:</label><span>${patient.attending_doctor}</span></div>
-                    <div class="info-item"><label>住院医生:</label><span>${patient.resident_doctor}</span></div>
-                    <div class="info-item"><label>主治医生:</label><span>${patient.chief_doctor}</span></div>
-                    <div class="info-item"><label>备注信息:</label><span>${patient.notes}</span></div>
+                    <div class="info-item"><label>患者ID:</label><span>${patient.id || ''}</span></div>
+                    <div class="info-item"><label>患者姓名:</label><span>${patient.name || ''}</span></div>
+                    <div class="info-item"><label>年龄:</label><span>${patient.age ? patient.age + '岁' : ''}</span></div>
+                    <div class="info-item"><label>性别:</label><span>${patient.gender || ''}</span></div>
+                    <div class="info-item"><label>科室:</label><span>${patient.department || ''}</span></div>
+                    <div class="info-item"><label>床号:</label><span>${patient.bed_num || ''}</span></div>
+                    <div class="info-item"><label>入院时间:</label><span>${patient.admission_date || ''}</span></div>
+                    ${admissionDays ? `<div class="info-item"><label>入院天数:</label><span>${admissionDays}天</span></div>` : ''}
+                    <div class="info-item"><label>主治医生:</label><span>${patient.attending_doctor || ''}</span></div>
+                    <div class="info-item"><label>住院医生:</label><span>${patient.resident_doctor || ''}</span></div>
+                    <div class="info-item"><label>实习医生:</label><span>${patient.chief_doctor || ''}</span></div>
+                    <div class="info-item"><label>备注信息:</label><span>${patient.notes || ''}</span></div>
                 </div>
             </div>
         `;
     }
 
-    function loadAiFuncList(suitName) {
-        if (!suitName) {
+    function loadAiFuncList(suitType) {
+        if (!suitType || (suitType !== 'personal' && suitType !== 'department' && suitType !== 'global')) {
             document.getElementById('ai-tree').innerHTML = '';
             document.getElementById('ai-description-content').innerHTML = '<p class="placeholder-text">请选择AI功能查看详细描述</p>';
             return;
         }
 
-        fetch(`/api/ai-workflow/${encodeURIComponent(suitName)}`)
-            .then(response => response.json())
+        fetch(`/api/ai-hierarchy-list/${suitType}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
-                renderAiTree(data);
-                renderAiDescription(data.AI_prompt);
+                if (data.error) {
+                    console.error('加载AI功能列表失败:', data.error);
+                    document.getElementById('ai-tree').innerHTML = '<div class="ai-tree-placeholder"><p>加载失败</p></div>';
+                    document.getElementById('ai-description-content').innerHTML = '<p class="placeholder-text">加载失败</p>';
+                    return;
+                }
+                renderAiHierarchyTree(data);
+            })
+            .catch(error => {
+                console.error('加载AI功能列表失败:', error);
+                document.getElementById('ai-tree').innerHTML = '<div class="ai-tree-placeholder"><p>加载失败</p></div>';
+                document.getElementById('ai-description-content').innerHTML = '<p class="placeholder-text">加载失败</p>';
             });
     }
 
-    function renderAiTree(func_list_item) {
+    function renderAiHierarchyTree(hierarchyList) {
         const treeContainer = document.getElementById('ai-tree');
         treeContainer.innerHTML = '';
 
-        func_list_item.forEach((item, index) => {
+        if (!hierarchyList || hierarchyList.length === 0) {
+            treeContainer.innerHTML = '<div class="ai-tree-placeholder"><p>暂无功能列表</p></div>';
+            document.getElementById('ai-description-content').innerHTML = '<p class="placeholder-text">请选择AI功能查看详细描述</p>';
+            return;
+        }
+
+        hierarchyList.forEach((item) => {
             const treeItem = document.createElement('div');
-            const treeItemID = document.createElement('div');
             treeItem.className = 'ai-tree-item';
+            treeItem.dataset.id = item.id;
             
-            // 创建显示名称的span元素
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = item.func_list_name;
-            nameSpan.className = 'ai-tree-item-name';
+            // 创建显示内容的容器
+            const itemContent = document.createElement('div');
+            itemContent.className = 'ai-tree-item-content';
             
-            treeItemID.className = 'ai-tree-item-id';
-            treeItemID.textContent = item.func_list_id;
-            treeItemID.hidden = true;
+            // 显示ID
+            const idDiv = document.createElement('div');
+            idDiv.className = 'ai-tree-item-id';
+            idDiv.textContent = `ID: ${item.id}`;
+            idDiv.style.fontSize = '0.85em';
+            idDiv.style.color = '#666';
             
-            treeItem.appendChild(nameSpan);
-            treeItem.appendChild(treeItemID);
-            treeItem.addEventListener('click', () => selectAiTreeItem(item));
+            // 显示group_name
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'ai-tree-item-name';
+            nameDiv.textContent = item.group_name || '未命名功能';
+            
+            // 显示group_note（备注）
+            if (item.group_note) {
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'ai-tree-item-note';
+                noteDiv.textContent = `备注: ${item.group_note}`;
+                noteDiv.style.fontSize = '0.85em';
+                noteDiv.style.color = '#888';
+                noteDiv.style.marginTop = '2px';
+                itemContent.appendChild(noteDiv);
+            }
+            
+            itemContent.appendChild(idDiv);
+            itemContent.appendChild(nameDiv);
+            
+            treeItem.appendChild(itemContent);
+            
+            // 添加点击事件
+            treeItem.addEventListener('click', function() {
+                // 移除其他项的选中状态
+                document.querySelectorAll('.ai-tree-item').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                
+                // 添加当前项的选中状态
+                this.classList.add('selected');
+                
+                // 显示功能描述
+                const description = item.group_note || '暂无备注信息';
+                document.getElementById('ai-description-content').innerHTML = `
+                    <h4>${item.group_name || '未命名功能'}</h4>
+                    <p><strong>ID:</strong> ${item.id}</p>
+                    <p><strong>备注:</strong> ${description}</p>
+                `;
+            });
+            
             treeContainer.appendChild(treeItem);
         });
-    }
-
-    function selectAiTreeItem(item) {
-        document.querySelectorAll('.ai-tree-item').forEach(el => {
-            el.classList.remove('selected');
-        });
-        
-        // 找到当前点击的AI功能项元素并添加选中状态
-        const currentTarget = event.currentTarget;
-        currentTarget.classList.add('selected');
-        
-        document.getElementById('ai-description-content').innerHTML = `
-            <h4>${item.func_list_name}</h4>
-            <p>${item.AI_prompt}</p>
-        `;
     }
 
     function renderAiDescription(description) {
@@ -378,6 +631,80 @@ document.addEventListener('DOMContentLoaded', function() {
             <h4>功能描述</h4>
             <p>${description}</p>
         `;
+    }
+
+    function loadAiPromptTable(patient) {
+        // 获取当前选中的AI功能项
+        const selectedFunctionElement = document.querySelector("#ai-tree > div.ai-tree-item.selected");
+        
+        if (!selectedFunctionElement) {
+            // 如果没有选中的AI功能，清空AI提示词表格
+            renderAiPromptTable([]);
+            return;
+        }
+        
+        // 获取选中的AI功能的行为组ID
+        const groupId = selectedFunctionElement.dataset.id;
+        
+        if (!groupId) {
+            console.warn('无法获取AI功能的行为组ID');
+            renderAiPromptTable([]);
+            return;
+        }
+        
+        // 向服务器发送请求，获取该行为组下所有 action_type 为 "AI" 的记录
+        fetch(`/api/ai-actions/${groupId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    console.error('加载AI动作列表失败:', data.error);
+                    renderAiPromptTable([]);
+                    return;
+                }
+                renderAiPromptTable(data);
+            })
+            .catch(error => {
+                console.error('加载AI动作列表失败:', error);
+                renderAiPromptTable([]);
+            });
+    }
+
+    function renderAiPromptTable(aiActions) {
+        const tbody = document.querySelector('#ai-prompt-table tbody');
+        if (!tbody) {
+            console.error('找不到 ai-prompt-table tbody');
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        
+        if (!aiActions || aiActions.length === 0) {
+            const emptyRow = document.createElement('tr');
+            emptyRow.innerHTML = '<td colspan="2">暂无AI提示词</td>';
+            tbody.appendChild(emptyRow);
+            return;
+        }
+        
+        aiActions.forEach(action => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${escapeHtml(action.action_name || '未命名')}</td>
+                <td>${escapeHtml(action.ai_illustration || '')}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function runAiFunction() {
@@ -389,7 +716,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const selectedFunction_name = selectedFunctionElement.querySelector('.ai-tree-item-name').textContent;
-        const selectedFunction_id = selectedFunctionElement.querySelector('.ai-tree-item-id').textContent;
+        // 从dataset中获取ID，或者从显示的ID文本中提取
+        const selectedFunction_id = selectedFunctionElement.dataset.id || 
+            selectedFunctionElement.querySelector('.ai-tree-item-id')?.textContent?.replace('ID: ', '') || '';
         
         if (!selectedFunction_id) {
             alert('请先选择AI功能');
@@ -435,6 +764,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 function_name: selectedFunction_name,
                 mode: 'single',
                 patient_id: patientId,
+                patient_name: patientName,  // 传递患者名称
                 func_list_id: selectedFunction_id
             })
         })
@@ -481,16 +811,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function runGroupAiFunction(selectedFunction_name, progressContainer, resultContainer,selectedFunction_id) {
-        // 获取当前科室的所有患者
-        const currentDepartment = document.getElementById('department-select').value;
+        // 从本地数据获取所有患者
+        const patients = window.patientData || [];
         
-        fetch(`/api/patients/${currentDepartment}`)
-            .then(response => response.json())
-            .then(patients => {
-                if (patients.length === 0) {
-                    alert('当前科室没有患者数据');
-                    return;
-                }
+        if (patients.length === 0) {
+            alert('当前没有患者数据，请先导入Excel文件');
+            return;
+        }
 
                 progressContainer.innerHTML = '<h4>AI组群运行进度</h4>';
                 resultContainer.innerHTML = '<h4>组群运行结果</h4>';
@@ -545,11 +872,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                     }, index * 1000); // 每个患者间隔1秒开始
                 });
-            })
-            .catch(error => {
-                console.error('获取患者列表失败:', error);
-                progressContainer.innerHTML += '<p class="error">❌ 获取患者列表失败</p>';
-            });
     }
 
     function runAiForPatient(patient, functionName, func_list_id, callback) {
@@ -562,6 +884,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 function_name: functionName,
                 mode: 'single',
                 patient_id: patient.id,
+                patient_name: patient.name,  // 传递患者名称
                 func_list_id: func_list_id
             })
         })
@@ -635,7 +958,10 @@ document.addEventListener('DOMContentLoaded', function() {
         updateProgress();
     }
 
-    // 初始化加载
-    loadPatientsByDepartment('personal');
+    // 初始化加载（不再从服务器加载患者数据）
+    // 患者数据将通过Excel文件导入到前端
+    // 如果需要默认显示空列表，可以取消下面的注释
+    // renderPatientList([]);
+    
     loadAiFunctions();
 }); 

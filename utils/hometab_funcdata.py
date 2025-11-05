@@ -630,7 +630,20 @@ class hometab_funcData:
     
     @classmethod
     def _load_list_data(cls, workTreeview, treeDatatxt, session, group_id=None):
-        """加载ActionList、ActionSuitList、ActionDebugList类型的数据"""
+        """加载ActionList、ActionSuitList、ActionDebugList类型的数据
+        
+        逻辑：
+        1. 先填充 action_type 为 hierarchy_list 的记录（目录节点）
+        2. 对于 hierarchy_list 记录：
+           - A1B2C0D0E0 表示它是 A1B2 级别（C0表示C级不存在）
+           - 父节点是 A1（上一级）
+           - 子节点包括 A1B2C(1-∞)D0E0 格式的记录
+        3. 对于非 hierarchy_list 记录：
+           - 挂载到匹配的 hierarchy_list 节点下
+        4. 排序规则：
+           - 相同 list_rank 级别中，sort_num 为空或0或相同，按记录先后顺序排序
+           - sort_num 不为0，按 sort_num 大小排序
+        """
         try:
             # 根据treeDatatxt确定模型
             if treeDatatxt == "ActionList":
@@ -648,25 +661,306 @@ class hometab_funcData:
             else:
                 all_records = session.query(model).all()
             
-            # 按list_rank分组
-            grouped_data = {}
+            # 分离 hierarchy_list 类型的记录和其他类型的记录
+            hierarchy_list_records = []
+            other_records = []
+            
             for record in all_records:
+                if not record.list_rank:
+                    continue
+                # 检查 action_type 字段名
+                action_type = getattr(record, 'action_type', None) or getattr(record, 'list_type', None)
+                if action_type == "hierarchy_list" or action_type == "list_hierarchy":
+                    hierarchy_list_records.append(record)
+                else:
+                    other_records.append(record)
+            
+            # 构建 hierarchy_list 的树结构（先填充目录）
+            # 按实际的 list_rank 值分组（保留0值，因为它们有含义）
+            hierarchy_grouped_data = {}
+            for record in hierarchy_list_records:
                 if record.list_rank:
-                    group_key = parse_list_rank_to_iid(record.list_rank)
-                    if group_key not in grouped_data:
-                        grouped_data[group_key] = []
-                    grouped_data[group_key].append(record)
+                    # 使用原始的 list_rank 作为 key，保留完整信息
+                    group_key = record.list_rank
+                    if group_key not in hierarchy_grouped_data:
+                        hierarchy_grouped_data[group_key] = []
+                    hierarchy_grouped_data[group_key].append(record)
             
-            # 对每个分组内的数据按action_sort_num排序
-            for group_key in grouped_data:
-                grouped_data[group_key].sort(key=lambda x: x.sort_num or 0)
+            # 对每个分组的记录排序：sort_num 为空或0或相同，按记录先后顺序；sort_num 不为0，按 sort_num 排序
+            for group_key in hierarchy_grouped_data:
+                records = hierarchy_grouped_data[group_key]
+                # 先按 sort_num 排序（sort_num 为 None 或 0 的记录会排在前面）
+                records.sort(key=lambda x: (x.sort_num or 0, x.id))
+                # 对于 sort_num 相同的记录，保持原有顺序（通过 id 作为第二排序键）
             
-            # 构建树形结构
-            cls._build_tree_from_grouped_data(workTreeview, grouped_data, "list")
+            # 构建 hierarchy_list 的树形结构（先填充目录）
+            cls._build_hierarchy_list_tree(workTreeview, hierarchy_grouped_data)
+            
+            # 处理其他类型的记录，挂载到对应的 hierarchy_list 节点下
+            # 按 list_rank 分组，然后排序
+            other_grouped_data = {}
+            for record in other_records:
+                if record.list_rank:
+                    group_key = record.list_rank
+                    if group_key not in other_grouped_data:
+                        other_grouped_data[group_key] = []
+                    other_grouped_data[group_key].append(record)
+            
+            # 对每个分组的记录排序
+            for group_key in other_grouped_data:
+                records = other_grouped_data[group_key]
+                records.sort(key=lambda x: (x.sort_num or 0, x.id))
+            
+            # 将其他记录挂载到对应的 hierarchy_list 节点下
+            for group_key, records in other_grouped_data.items():
+                # 找到这些记录应该挂载到的 hierarchy_list 节点
+                parent_iid = cls._find_parent_hierarchy_list_for_other(group_key, hierarchy_grouped_data, workTreeview)
+                
+                for record in records:
+                    record_iid = f"record_{record.id}"
+                    action_type = getattr(record, 'action_type', None) or getattr(record, 'list_type', None) or ""
+                    text_name = "📄"
+                    values = (
+                        record.action_name or "",
+                        action_type,
+                        record.action_note or "" if hasattr(record, 'action_note') else "",
+                        record.id
+                    )
+                    
+                    try:
+                        if parent_iid and workTreeview.exists(parent_iid):
+                            workTreeview.insert(parent_iid, "end", iid=record_iid, text=text_name, values=values)
+                        else:
+                            workTreeview.insert("", "end", iid=record_iid, text=text_name, values=values)
+                    except Exception as e:
+                        logger.warning(f"插入记录节点失败: {record.id}, {e}")
             
         except Exception as e:
             logger.error(f"加载列表数据失败: {str(e)}")
             print(traceback.format_exc())
+    
+    @classmethod
+    def _get_list_rank_level(cls, list_rank):
+        """获取 list_rank 的实际级别
+        
+        例如：A1B2C0D0E0 -> A1B2（因为C0表示C级不存在）
+              A1B2C3D0E0 -> A1B2C3（因为D0表示D级不存在）
+        """
+        rank_dict = parse_group_rank(list_rank)
+        level_parts = []
+        
+        # 从A到E检查，遇到0就停止
+        for level in ['A', 'B', 'C', 'D', 'E']:
+            if rank_dict[level] == 0:
+                break
+            level_parts.append(f"{level}{rank_dict[level]}")
+        
+        return ''.join(level_parts) if level_parts else ""
+    
+    @classmethod
+    def _get_parent_list_rank(cls, list_rank):
+        """获取 list_rank 的父级 list_rank
+        
+        例如：A1B2C0D0E0 -> A1B0C0D0E0（父级是A1）
+              A1B2C3D0E0 -> A1B2C0D0E0（父级是A1B2）
+        """
+        rank_dict = parse_group_rank(list_rank)
+        parent_rank_dict = rank_dict.copy()
+        
+        # 找到最后一个非0的级别，将其置为0
+        for level in ['E', 'D', 'C', 'B']:
+            if rank_dict[level] > 0:
+                parent_rank_dict[level] = 0
+                break
+        
+        # 构建父级 list_rank
+        return f"A{parent_rank_dict['A']}B{parent_rank_dict['B']}C{parent_rank_dict['C']}D{parent_rank_dict['D']}E{parent_rank_dict['E']}"
+    
+    @classmethod
+    def _build_hierarchy_list_tree(cls, workTreeview, hierarchy_grouped_data):
+        """构建 hierarchy_list 的树形结构
+        
+        hierarchy_grouped_data 的 key 是完整的 list_rank（如 "A1B2C0D0E0"）
+        """
+        try:
+            if not hierarchy_grouped_data:
+                return
+            
+            # 为每个 hierarchy_list 记录计算实际级别和父级
+            hierarchy_info = {}
+            list_rank_to_iid = {}  # list_rank -> iid 映射，用于后续查找
+            
+            for list_rank, records in hierarchy_grouped_data.items():
+                level = cls._get_list_rank_level(list_rank)
+                parent_list_rank = cls._get_parent_list_rank(list_rank)
+                parent_level = cls._get_list_rank_level(parent_list_rank)
+                
+                # 生成 iid：使用 parse_list_rank_to_iid 来生成 iid，确保唯一性
+                # parse_list_rank_to_iid 会去掉0值部分，例如：A1B2C0D0E0 -> A1B2
+                iid = parse_list_rank_to_iid(list_rank)
+                if not iid:
+                    # 如果 parse_list_rank_to_iid 返回 None，使用 level
+                    iid = level if level else list_rank
+                
+                # 存储映射
+                list_rank_to_iid[list_rank] = iid
+                
+                hierarchy_info[list_rank] = {
+                    'level': level,
+                    'parent_level': parent_level,
+                    'parent_list_rank': parent_list_rank,
+                    'iid': iid,
+                    'records': records
+                }
+            
+            # 将 list_rank_to_iid 映射存储到类变量中，供 _find_parent_hierarchy_list_for_other 使用
+            cls._hierarchy_list_rank_to_iid = list_rank_to_iid
+            
+            # 建立父子关系：通过 parent_level 匹配查找父节点
+            parent_child_map = {}  # parent_list_rank -> [child_list_ranks]
+            root_nodes = []
+            
+            for list_rank, info in hierarchy_info.items():
+                parent_level = info['parent_level']
+                
+                # 查找父节点（通过 parent_level 匹配）
+                parent_list_rank = None
+                if parent_level:  # parent_level 不为空
+                    for p_list_rank, p_info in hierarchy_info.items():
+                        if p_info['level'] == parent_level:
+                            parent_list_rank = p_list_rank
+                            break  # 找到第一个匹配的就使用
+                
+                if parent_list_rank and parent_list_rank in hierarchy_info:
+                    # 找到父节点，避免循环依赖：检查是否会产生循环
+                    if list_rank != parent_list_rank:  # 不能是自身
+                        if parent_list_rank not in parent_child_map:
+                            parent_child_map[parent_list_rank] = []
+                        parent_child_map[parent_list_rank].append(list_rank)
+                    else:
+                        # 自身作为父节点，这是错误的情况，作为根节点处理
+                        root_nodes.append(list_rank)
+                else:
+                    # 没有找到父节点，作为根节点
+                    root_nodes.append(list_rank)
+            
+            # 递归插入节点（添加深度限制和循环检测）
+            inserted_iids = set()  # 记录已插入的iid，避免重复
+            inserting_stack = set()  # 记录正在插入的节点，检测循环依赖
+            
+            def insert_hierarchy_node(list_rank, parent_iid=None):
+                # 检测循环依赖
+                if list_rank in inserting_stack:
+                    logger.error(f"检测到循环依赖: {list_rank}")
+                    return
+                
+                if list_rank not in hierarchy_info:
+                    return
+                
+                info = hierarchy_info[list_rank]
+                iid = info['iid']
+                records = info['records']
+                
+                # 检查是否已插入（避免重复）
+                if iid in inserted_iids:
+                    # 节点已插入，只处理子节点
+                    final_iid = iid
+                else:
+                    inserting_stack.add(list_rank)
+                    
+                    # 使用第一个记录来显示（如果有多个，取第一个）
+                    record = records[0]
+                    
+                    text_name = "📁"
+                    values = (record.action_name or "", record.action_type or "", record.action_note or "" if hasattr(record, 'action_note') else "", record.id)
+                    
+                    try:
+                        if parent_iid and workTreeview.exists(parent_iid):
+                            workTreeview.insert(parent_iid, "end", iid=iid, text=text_name, values=values)
+                        else:
+                            workTreeview.insert("", "end", iid=iid, text=text_name, values=values)
+                        final_iid = iid
+                        inserted_iids.add(iid)
+                    except Exception as e:
+                        logger.warning(f"插入 hierarchy_list 节点失败: {list_rank}, iid: {iid}, error: {e}")
+                        inserting_stack.remove(list_rank)
+                        return
+                    
+                    inserting_stack.remove(list_rank)
+                
+                # 递归插入子节点
+                if list_rank in parent_child_map:
+                    # 对子节点排序（按 sort_num，然后按 list_rank）
+                    children = sorted(parent_child_map[list_rank], 
+                                    key=lambda x: (hierarchy_info[x]['records'][0].sort_num or 0, x))
+                    for child_list_rank in children:
+                        insert_hierarchy_node(child_list_rank, final_iid)
+            
+            # 从根节点开始插入
+            if root_nodes:
+                for root_list_rank in sorted(root_nodes, key=lambda x: (hierarchy_info[x]['records'][0].sort_num or 0, x)):
+                    insert_hierarchy_node(root_list_rank)
+            
+            # 处理没有被插入的节点（可能是父子关系建立有问题）
+            for list_rank in hierarchy_info.keys():
+                iid = hierarchy_info[list_rank]['iid']
+                if iid not in inserted_iids:
+                    logger.warning(f"节点未被插入，尝试插入: {list_rank}, iid: {iid}")
+                    insert_hierarchy_node(list_rank)
+            
+        except Exception as e:
+            logger.error(f"构建 hierarchy_list 树结构失败: {str(e)}")
+            print(traceback.format_exc())
+    
+    @classmethod
+    def _find_parent_hierarchy_list_for_other(cls, list_rank, hierarchy_grouped_data, workTreeview):
+        """为其他类型的记录找到应该挂载到的 hierarchy_list 节点的 iid
+        
+        规则：
+        1. 如果 list_rank 完全匹配某个 hierarchy_list 的 list_rank，挂载到该节点下
+        2. 如果没有完全匹配，尝试查找父级 hierarchy_list 节点
+        """
+        try:
+            if not list_rank or not hierarchy_grouped_data:
+                return None
+            
+            # 使用存储的映射来查找 iid
+            list_rank_to_iid = getattr(cls, '_hierarchy_list_rank_to_iid', {})
+            
+            # 方法1：直接查找完全匹配的 hierarchy_list
+            if list_rank in hierarchy_grouped_data:
+                # 使用映射查找 iid
+                if list_rank in list_rank_to_iid:
+                    iid = list_rank_to_iid[list_rank]
+                    if workTreeview.exists(iid):
+                        return iid
+            
+            # 方法2：如果没有完全匹配，尝试查找父级 hierarchy_list 节点
+            # 例如：记录的 list_rank = "A1B2C3D0E0"，查找 list_rank = "A1B2C0D0E0" 的 hierarchy_list
+            record_rank_dict = parse_group_rank(list_rank)
+            
+            # 从最深到最浅逐级向上查找父级
+            for level_char in ['E', 'D', 'C', 'B']:
+                if record_rank_dict[level_char] > 0:
+                    # 将当前级别置为0，查找父级
+                    parent_rank_dict = record_rank_dict.copy()
+                    parent_rank_dict[level_char] = 0
+                    parent_list_rank = f"A{parent_rank_dict['A']}B{parent_rank_dict['B']}C{parent_rank_dict['C']}D{parent_rank_dict['D']}E{parent_rank_dict['E']}"
+                    
+                    # 查找该父级是否存在于 hierarchy_grouped_data 中
+                    if parent_list_rank in hierarchy_grouped_data:
+                        # 使用映射查找 iid
+                        if parent_list_rank in list_rank_to_iid:
+                            parent_iid = list_rank_to_iid[parent_list_rank]
+                            if workTreeview.exists(parent_iid):
+                                return parent_iid
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"查找父 hierarchy_list 节点失败: {str(e)}")
+            print(traceback.format_exc())
+            return None
     
     @classmethod
     def _load_hierarchy_data(cls, workTreeview, treeDatatxt, session):
@@ -757,7 +1051,7 @@ class hometab_funcData:
             except Exception as e:
                 logger.warning(f"insert_node：无法插入节点 {iid}: {e}")
             # 递归插入子节点
-            for child_key in sorted(node['children'], key=lambda x: tree_dict[x]['sort_num']):
+            for child_key in sorted(node['children'], key=lambda x: tree_dict[x]['sort_num'] or 0):
                 insert_node(child_key, node['iid'])
         try:
             # 先初步排序
@@ -770,7 +1064,7 @@ class hometab_funcData:
                         'iid': None,
                         'children': [],
                         'parent': None,
-                        'sort_num': grouped_data[group_key][0].sort_num
+                        'sort_num': grouped_data[group_key][0].sort_num if grouped_data[group_key][0].sort_num is not None else 0
                     }
             # 完善嵌套字典，建立父子关系
             for key, node in tree_dict.items():
@@ -805,7 +1099,7 @@ class hometab_funcData:
                 else:
                     node['parent'] = None
             
-            for tree_key,tree_item in sorted(tree_dict.items(), key=lambda x: x[1]['sort_num']):
+            for tree_key,tree_item in sorted(tree_dict.items(), key=lambda x: x[1]['sort_num'] or 0):
                 if tree_key:
                     if "B0" in tree_key or len(tree_key) == 2:
                         insert_node(tree_key,tree_item['parent'])

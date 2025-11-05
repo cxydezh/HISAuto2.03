@@ -11,6 +11,8 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+    <!-- 添加Excel读取库 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -49,16 +51,14 @@
                         <!-- 左侧面板 -->
                         <div class="left-panel">
                             <div class="panel-section">
-                                <button class="update-excel-btn">更新Excel文件</button>
+                                <button class="update-excel-btn" id="update-excel-btn">更新Excel文件</button>
+                                <input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display: none;">
                             </div>
                             
                             <div class="panel-section">
                                 <label for="department-select">科室选择</label>
                                 <select id="department-select" class="department-select">
                                     <option value="personal">个人</option>
-                                    <option value="nephrology">肾病科</option>
-                                    <option value="respiratory">呼吸内科</option>
-                                    <option value="cardiology">心血管内科</option>
                                 </select>
                             </div>
                             
@@ -130,11 +130,18 @@
                                                 <button class="run-ai-btn" id="run-ai-btn">运行</button>
                                             </div>
                                             
-                                            <div class="ai-description">
+                                            <div class="ai-prompt-content">
                                                 <label>AI提示词</label>
-                                                <div class="description-content" id="ai-description-content">
-                                                    <p class="placeholder-text">请选择AI功能查看详细描述</p>
-                                                </div>
+                                                <table class="ai-prompt-table" id="ai-prompt-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>AI名称</th>
+                                                            <th>AI提示词</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="ai-prompt-body">
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         </div>
                                     </div>

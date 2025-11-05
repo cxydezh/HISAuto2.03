@@ -697,7 +697,7 @@ class ActionRecorder:
             # 关闭图标窗口
             if self.icon_window:
                 try:
-                    self.icon_window.destroy
+                    self.icon_window.destroy()
                 except Exception as e:
                     print(f"关闭图标窗口失败: {str(e)}")
             # 恢复主窗口
@@ -712,18 +712,13 @@ class ActionRecorder:
             else:
                 messagebox.showinfo("录制完成", f"录制已完成，共记录 {len(self.recorded_events)} 个事件")
             
-            # 刷新动作列表
-            if hasattr(self.home_tab, '_refresh_action_list'):
-                self.home_tab._refresh_action_list()
-            
-            # 保存事件
-            if self.session is not None:
-                self._save_recorded_events()
-            else:
-                print("无数据库会话，跳过事件保存。")
             # 调用关闭窗口
-            self.record_window.destroy()
-            self.record_window = None
+            if self.record_window:
+                try:
+                    self.record_window.destroy()
+                except Exception as e:
+                    print(f"关闭录制窗口失败: {str(e)}")
+                self.record_window = None
         except Exception as e:
             print(f"停止录制异常: {str(e)}")
             print(traceback.format_exc())
@@ -738,16 +733,45 @@ class ActionRecorder:
         """保存录制的事件到数据库"""
         try:
             print(f"开始保存 {len(self.recorded_events)} 个录制事件...")
-            for event in self.recorded_events:
+            
+            # 获取list_rank，优先使用current_action_list_selected_rank，如果没有则使用默认值
+            list_rank = None
+            if hasattr(self.home_tab, 'current_action_list_selected_rank') and self.home_tab.current_action_list_selected_rank:
+                list_rank = self.home_tab.current_action_list_selected_rank
+            elif hasattr(self.home_tab, 'current_action_list_hierarchy_id') and self.home_tab.current_action_list_hierarchy_id:
+                # 如果有iid，可以转换为rank字符串，但通常应该使用selected_rank
+                from gui.tabs.Hierarchyutils import iid_to_group_rank
+                list_rank = iid_to_group_rank(self.home_tab.current_action_list_hierarchy_id)
+            
+            # 如果没有有效的list_rank，使用默认值（基于group_id）
+            if not list_rank:
+                # 使用一个默认的list_rank格式，可以根据实际需求调整
+                list_rank = "A1"  # 默认值，实际应该根据业务逻辑生成
+            
+            # 查询当前 group_id 和 list_rank 下的最大 sort_num
+            from sqlalchemy import func
+            max_sort_num_result = self.session.query(func.max(ActionList.sort_num)).filter(
+                ActionList.group_id == self.home_tab.action_group_id,
+                ActionList.list_rank == list_rank
+            ).scalar()
+            
+            # 如果没有找到记录，从1开始；否则从最大sort_num + 1开始
+            current_sort_num = 1 if max_sort_num_result is None else max_sort_num_result + 1
+            
+            print(f"当前 group_id={self.home_tab.action_group_id}, list_rank={list_rank}, 起始 sort_num={current_sort_num}")
+            
+            for index, event in enumerate(self.recorded_events):
                 if not isinstance(event, dict):
                     print(f"跳过无效事件: {event}")
                     continue
-                # 创建动作列表记录
+                
+                # 创建动作列表记录，分配sort_num
                 action_list = ActionList(
-                    list_rank_id=self.home_tab.current_list_rank_hierarchy_id,
+                    list_rank=list_rank,
                     group_id=self.home_tab.action_group_id,
+                    sort_num=current_sort_num + index,  # 从当前sort_num开始递增
                     action_type=event['type'],
-                    action_name=f"录制事件_{len(self.recorded_events) - self.recorded_events.index(event)}",
+                    action_name=f"录制事件_{index + 1}",
                     next_id=None,
                     debug_group_id=None,
                     action_note=f"自动录制的{event['type']}事件",
@@ -780,6 +804,16 @@ class ActionRecorder:
             
             self.session.commit()
             print(f"成功保存 {len(self.recorded_events)} 个录制事件到数据库")
+            
+            # 刷新行为列表树
+            if hasattr(self.home_tab, 'action_list'):
+                from utils.hometab_funcdata import hometab_funcData
+                hometab_funcData._load_action_group_data(
+                    self.home_tab.action_list, 
+                    'ActionList', 
+                    self.home_tab.action_group_id
+                )
+                print("行为列表树已刷新")
             
         except Exception as e:
             print(f"保存录制事件失败: {str(e)}")

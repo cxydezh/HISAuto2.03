@@ -2,7 +2,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from gui.tabs.base_tab import BaseTab
 from models.task import TaskList, TaskListFinished
-from models.actions import ActionGroup
+from models.actions import ActionGroup, ActionList
+from gui.tabs.Hierarchyutils import parse_group_rank
+from utils.home_tab_func import ActionGroupRun
+from database.db_manager import DatabaseManager
+from config.config_manager import ConfigManager
+from datetime import datetime
 
 class TaskControlTab(BaseTab):
     def __init__(self, notebook, main_window):
@@ -122,12 +127,252 @@ class TaskControlTab(BaseTab):
         
         if self.show_question("确认", f"确定要执行任务 {task_id} 吗？"):
             try:
-                # 模拟任务执行
-                # TODO: 实际的任务执行逻辑
-                self.show_message("成功", f"任务 {task_id} 已开始执行")
-                self._refresh_task_lists()
+                # 获取任务信息
+                config_manager = ConfigManager()
+                db_path = config_manager.get_value('System', 'DataSource')
+                encryption_key = config_manager.get_value('Security', 'DBEncryptionKey')
+                
+                if not db_path or not encryption_key:
+                    self.show_message("错误", "数据库配置信息不完整", "error")
+                    return
+                
+                db_manager = DatabaseManager(db_path, encryption_key)
+                db_manager.initialize()
+                session = db_manager.Session()
+                
+                try:
+                    # 获取任务记录
+                    task = session.query(TaskList).filter_by(id=task_id).first()
+                    if not task:
+                        self.show_message("错误", f"找不到任务 {task_id}", "error")
+                        return
+                    
+                    # 获取行为组ID
+                    actions_group_id = task.actions_group_id
+                    
+                    if not actions_group_id:
+                        self.show_message("错误", "该任务没有关联的行为组", "error")
+                        return
+                    
+                    # 使用ActionGroupRun来执行行为组
+                    # run_action_group方法会自动检查是否有Excel表格，如果有则遍历每一行执行，如果没有则只执行一次
+                    from utils.home_tab_func import ActionGroupRun
+                    action_runner = ActionGroupRun(None)  # 暂时传None，如果需要home_tab的功能，可以后续修改
+                    
+                    # 调用run_action_group方法，该方法会：
+                    # 1. 检查行为组是否有Excel表格（excel_name、excel_sheet_num、excel_column）
+                    # 2. 如果有表格，遍历每一行数据，每访问一行就执行一次行为组
+                    # 3. 如果没有表格，只执行一次行为组
+                    success = action_runner.run_action_group(actions_group_id)
+                    
+                    if success:
+                        # 将任务移动到已完成列表
+                        finished_task = task.move_to_finished(datetime.now())
+                        session.add(finished_task)
+                        session.delete(task)
+                        session.commit()
+                        
+                        self.show_message("成功", f"任务 {task_id} 执行完成")
+                        self._refresh_task_lists()
+                    else:
+                        self.show_message("错误", f"任务 {task_id} 执行失败", "error")
+                        
+                finally:
+                    session.close()
+                    
             except Exception as e:
                 self.show_message("错误", f"任务执行失败: {str(e)}", "error")
+                import traceback
+                traceback.print_exc()
+    
+    def _get_ordered_actions_by_tree_structure(self, session, group_id):
+        """根据树结构顺序获取ActionList
+        
+        排序规则（根据需求文档）：
+        1. 先根据list_rank级别排序
+        2. 然后根据sort_num排序
+        3. 排除action_type为"hierarchy_list"的记录（这些只是目录节点）
+        
+        Args:
+            session: 数据库会话
+            group_id: 行为组ID
+            
+        Returns:
+            list: 按树结构顺序排列的ActionList记录列表
+        """
+        try:
+            # 获取所有行为元
+            all_actions = session.query(ActionList).filter_by(group_id=group_id).all()
+            
+            # 过滤掉hierarchy_list类型的记录（这些只是目录节点，不执行）
+            executable_actions = []
+            for action in all_actions:
+                action_type = getattr(action, 'action_type', None)
+                if action_type and action_type not in ['hierarchy_list', 'list_hierarchy']:
+                    # 只处理有list_rank的记录
+                    if action.list_rank:
+                        executable_actions.append(action)
+            
+            # 按照树结构顺序排序
+            # 排序规则：先按list_rank排序，然后按sort_num排序
+            def get_sort_key(action):
+                """获取排序键"""
+                if not action.list_rank:
+                    # 如果没有list_rank，放到最后
+                    return f"Z999_{action.sort_num or 0:06d}_{action.id}"
+                
+                # 解析list_rank
+                rank_dict = parse_group_rank(action.list_rank)
+                
+                # 创建排序键：A级_B级_C级_D级_E级_sort_num_id
+                sort_key = (
+                    f"{rank_dict['A']:03d}_{rank_dict['B']:03d}_{rank_dict['C']:03d}_"
+                    f"{rank_dict['D']:03d}_{rank_dict['E']:03d}_{action.sort_num or 0:06d}_{action.id}"
+                )
+                return sort_key
+            
+            # 排序
+            ordered_actions = sorted(executable_actions, key=lambda x: get_sort_key(x))
+            
+            return ordered_actions
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def _execute_actions_in_order(self, session, ordered_actions, action_runner):
+        """按照顺序执行行为元
+        
+        Args:
+            session: 数据库会话
+            ordered_actions: 按树结构顺序排列的ActionList记录列表
+            action_runner: ActionGroupRun实例，用于执行行为元
+            
+        Returns:
+            bool: 是否成功执行
+        """
+        try:
+            # 创建ID到记录的映射，用于快速查找
+            action_map = {action.id: action for action in ordered_actions}
+            
+            # 记录已执行的action ID，避免循环
+            executed_ids = set()
+            
+            # 从第一个action开始执行
+            current_action_id = None
+            if ordered_actions:
+                current_action_id = ordered_actions[0].id
+            
+            # 按照树结构顺序执行，但如果next_id存在，优先跳转到next_id
+            while current_action_id and current_action_id not in executed_ids:
+                executed_ids.add(current_action_id)
+                
+                # 获取当前action
+                current_action = action_map.get(current_action_id)
+                if not current_action:
+                    # 如果找不到当前action，尝试从数据库中查找
+                    current_action = session.query(ActionList).filter_by(id=current_action_id, group_id=action_runner.group_id).first()
+                    if not current_action:
+                        break
+                
+                # 执行当前action
+                action_result = self._execute_single_action(current_action, action_runner)
+                
+                if not action_result:
+                    # 如果执行失败，可以进入Debug流程或终止
+                    # 这里暂时返回False，后续可以根据需求添加Debug处理
+                    return False
+                
+                # 确定下一个action
+                if current_action.next_id:
+                    # 如果有next_id，优先跳转到next_id对应的action
+                    next_action = session.query(ActionList).filter_by(
+                        id=current_action.next_id, 
+                        group_id=action_runner.group_id
+                    ).first()
+                    
+                    if next_action:
+                        # 如果next_id指向的action在ordered_actions中，添加到map中
+                        if next_action.id not in action_map:
+                            action_map[next_action.id] = next_action
+                        current_action_id = next_action.id
+                    else:
+                        # next_id指向的action不存在或不在当前group中，按顺序执行下一个
+                        current_action_id = self._get_next_action_id_by_order(
+                            current_action_id, ordered_actions
+                        )
+                else:
+                    # 没有next_id，按树结构顺序执行下一个
+                    current_action_id = self._get_next_action_id_by_order(
+                        current_action_id, ordered_actions
+                    )
+            
+            return True
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _get_next_action_id_by_order(self, current_action_id, ordered_actions):
+        """根据树结构顺序获取下一个action的ID
+        
+        Args:
+            current_action_id: 当前action的ID
+            ordered_actions: 按树结构顺序排列的ActionList记录列表
+            
+        Returns:
+            int or None: 下一个action的ID，如果没有则返回None
+        """
+        # 找到当前action在列表中的位置
+        current_index = None
+        for i, action in enumerate(ordered_actions):
+            if action.id == current_action_id:
+                current_index = i
+                break
+        
+        # 如果找到当前位置，返回下一个action的ID
+        if current_index is not None and current_index + 1 < len(ordered_actions):
+            return ordered_actions[current_index + 1].id
+        
+        return None
+    
+    def _execute_single_action(self, action, action_runner):
+        """执行单个行为元
+        
+        Args:
+            action: ActionList记录
+            action_runner: ActionGroupRun实例
+            
+        Returns:
+            bool: 是否成功执行
+        """
+        try:
+            action_type = getattr(action, 'action_type', None)
+            
+            if action_type == 'mouse':
+                return action_runner.run_mouse_action(action.id)
+            elif action_type == 'keyboard':
+                return action_runner.run_keyboard_action(action.id)
+            elif action_type == 'code_text' or action_type == 'code':
+                return action_runner.run_code_action(action.id)
+            elif action_type == 'class':
+                return action_runner.run_class_action(action.id)
+            elif action_type == 'ai' or action_type == 'AI':
+                return action_runner.run_AI_action(action.id)
+            elif action_type == 'printscreen' or action_type == 'image':
+                return action_runner.run_image_action(action.id)
+            elif action_type == 'function':
+                return action_runner.run_function_action(action.id)
+            else:
+                # 未知的行为类型
+                return False
+                
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return False
         
     def _pause_task(self):
         """暂停选中的任务"""

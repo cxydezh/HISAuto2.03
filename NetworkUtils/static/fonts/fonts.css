@@ -4,10 +4,7 @@
 @font-face {
   font-family: 'Microsoft Yahei';
   src: local('Microsoft Yahei'),
-       local('微软雅黑'),
-       url('msyh.ttf') format('truetype'),
-       url('msyh.woff2') format('woff2'),
-       url('msyh.woff') format('woff');
+       local('微软雅黑');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -16,23 +13,21 @@
 @font-face {
   font-family: 'Microsoft Yahei';
   src: local('Microsoft Yahei Bold'),
-       local('微软雅黑 Bold'),
-       url('msyhbd.ttf') format('truetype'),
-       url('msyhbd.woff2') format('woff2'),
-       url('msyhbd.woff') format('woff');
+       local('微软雅黑 Bold');
   font-weight: bold;
   font-style: normal;
   font-display: swap;
 }
 
 /* Source Han Sans 字体 */
+/* 优先使用系统本地字体，如果不存在则使用回退字体 */
 @font-face {
   font-family: 'Source Han Sans';
-  src: local('Source Han Sans'),
+  src: local('Source Han Sans SC'),
+       local('Source Han Sans'),
        local('思源黑体'),
-       url('SourceHanSans-Regular.ttf') format('truetype'),
-       url('SourceHanSans-Regular.woff2') format('woff2'),
-       url('SourceHanSans-Regular.woff') format('woff');
+       local('Noto Sans SC'),
+       local('PingFang SC');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -40,11 +35,11 @@
 
 @font-face {
   font-family: 'Source Han Sans';
-  src: local('Source Han Sans Bold'),
+  src: local('Source Han Sans SC Bold'),
+       local('Source Han Sans Bold'),
        local('思源黑体 Bold'),
-       url('SourceHanSans-Bold.ttf') format('truetype'),
-       url('SourceHanSans-Bold.woff2') format('woff2'),
-       url('SourceHanSans-Bold.woff') format('woff');
+       local('Noto Sans SC Bold'),
+       local('PingFang SC Bold');
   font-weight: bold;
   font-style: normal;
   font-display: swap;
@@ -52,11 +47,11 @@
 
 @font-face {
   font-family: 'Source Han Sans';
-  src: local('Source Han Sans Light'),
+  src: local('Source Han Sans SC Light'),
+       local('Source Han Sans Light'),
        local('思源黑体 Light'),
-       url('SourceHanSans-Light.ttf') format('truetype'),
-       url('SourceHanSans-Light.woff2') format('woff2'),
-       url('SourceHanSans-Light.woff') format('woff');
+       local('Noto Sans SC Light'),
+       local('PingFang SC Light');
   font-weight: 300;
   font-style: normal;
   font-display: swap;

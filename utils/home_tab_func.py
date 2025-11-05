@@ -11,6 +11,11 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 import pyautogui
+from pyautogui import FailSafeException
+
+# 禁用PyAutoGUI的fail-safe机制（仅在自动化系统环境中使用）
+# 注意：禁用fail-safe会移除安全保护，请确保脚本正确运行
+pyautogui.FAILSAFE = False
 from pynput import mouse, keyboard
 import win32gui  # type: ignore
 import win32api  # type: ignore
@@ -475,20 +480,27 @@ class ActionGroupRun:
     def __init__(self, home_tab):
         self.home_tab = home_tab
         self.logger = Logger()
-    def _get_session(self):
-        """获取数据库会话"""
+    def _get_session(self, force_refresh=False):
+        """获取数据库会话
+        
+        Args:
+            force_refresh: 是否强制刷新会话（当前未使用，保留以兼容现有调用）
+        
+        Returns:
+            Session: 数据库会话对象，失败返回None
+        """
         session = None
         #获取数据库会话
         config = ConfigManager()
         db_path = config.get_value('System', 'DataSource')
         encryption_key = config.get_value('Security', 'DBEncryptionKey')
         if not db_path or not encryption_key:
-            return
+            return None
         db_manager = DatabaseManager(db_path, encryption_key)
         db_manager.initialize()
         session = db_manager.Session()
         if not session:
-            return
+            return None
         self.session = session
         return session
     def _close_session(self):
@@ -499,7 +511,17 @@ class ActionGroupRun:
             logger.info("数据库会话已关闭")
         return True
     def run_action_group(self, group_id):
-        """运行行为组"""
+        """运行行为组
+        
+        如果行为组关联了Excel表格，则遍历表格的每一行数据，每访问一行就执行一次行为组。
+        如果行为组没有关联Excel表格，则只执行一次行为组。
+        
+        Args:
+            group_id: 行为组ID
+            
+        Returns:
+            bool: 是否成功执行
+        """
         self.group_id = group_id
         session = self._get_session(True)
         self.excel_value = None
@@ -509,103 +531,305 @@ class ActionGroupRun:
         try:
             group = session.query(ActionGroup).filter_by(id=group_id).first()
             if not group:
+                logger.error(f"行为组不存在: {group_id}")
                 return False
-            # 判断行为组中的excel_name、excel_sheet_num、excel_column是否为空
-            if group.excel_name and group.excel_sheet_num and group.excel_column:
-                # 读取excel文件
-                excel_file = group.excel_name
-                excel_sheet_num = group.excel_sheet_num
-                excel_column = group.excel_column
-                # 读取excel文件
-                excel_data = pd.read_excel(excel_file, sheet_name=excel_sheet_num)
-                # 获取excel文件的列
-                excel_column_data = excel_data[excel_column]
-                # 开始执行循环，直到excel_column_data.iloc[0]为空
-                excel_loop_result = True
-                while excel_column_data.iloc[0] is not None and excel_loop_result:
-                    # 获取excel文件的值
-                    self.excel_value = excel_column_data.iloc[0]
-                    excel_loop_result = self.run_action(self.excel_value)
-                    if excel_loop_result:
-                        # 如果excel_loop_result为True，则在excel_column的下一列中输入"OK"
-                        excel_column_data.iloc[1] = "OK"
-                        continue
-                    else:
-                        # 如果excel_loop_result为False，则在excel_column的下一列中输入"NG"
-                        excel_column_data.iloc[1] = "NG"
-                        continue
-            else:
-                ls_result = self.run_action(self.group_id)
-                if not ls_result:
+            
+            # 判断行为组中的excel_name、excel_sheet_num、excel_column是否都存在
+            has_excel = group.excel_name and group.excel_sheet_num and group.excel_column
+            
+            if has_excel:
+                # 如果存在Excel表格，遍历每一行数据
+                try:
+                    excel_file = group.excel_name
+                    excel_sheet_num = group.excel_sheet_num
+                    excel_column = group.excel_column
+                    
+                    # 读取Excel文件
+                    excel_data = pd.read_excel(excel_file, sheet_name=excel_sheet_num)
+                    
+                    # 检查列是否存在
+                    if excel_column not in excel_data.columns:
+                        logger.error(f"Excel文件中不存在列: {excel_column}")
+                        return False
+                    
+                    # 获取总行数
+                    total_rows = len(excel_data)
+                    logger.info(f"Excel表格共有 {total_rows} 行数据，开始遍历执行...")
+                    
+                    # 遍历每一行数据
+                    success_count = 0
+                    fail_count = 0
+                    
+                    for row_index in range(total_rows):
+                        # 获取当前行的指定列数据
+                        excel_value = excel_data.at[row_index, excel_column]
+                        
+                        # 如果该行的数据为空或NaN，跳过该行
+                        if pd.isna(excel_value) or (isinstance(excel_value, str) and excel_value.strip() == ''):
+                            logger.info(f"第 {row_index + 1} 行数据为空，跳过")
+                            continue
+                        
+                        logger.info(f"开始执行第 {row_index + 1}/{total_rows} 行，数据值: {excel_value}")
+                        
+                        # 设置当前行的Excel值，供行为组使用
+                        self.excel_value = excel_value
+                        
+                        # 执行一次行为组
+                        action_result = self.run_action(excel_value)
+                        
+                        # 根据执行结果更新Excel（如果存在结果列）
+                        # 查找结果列（通常是下一列）
+                        column_index = excel_data.columns.get_loc(excel_column)
+                        if column_index + 1 < len(excel_data.columns):
+                            result_column = excel_data.columns[column_index + 1]
+                            if action_result:
+                                excel_data.at[row_index, result_column] = "OK"
+                                success_count += 1
+                                logger.info(f"第 {row_index + 1} 行执行成功")
+                            else:
+                                excel_data.at[row_index, result_column] = "NG"
+                                fail_count += 1
+                                logger.warning(f"第 {row_index + 1} 行执行失败")
+                        
+                    # 保存更新后的Excel文件
+                    try:
+                        excel_data.to_excel(excel_file, sheet_name=excel_sheet_num, index=False)
+                        logger.info(f"Excel文件已更新，成功: {success_count}, 失败: {fail_count}")
+                    except Exception as e:
+                        logger.error(f"保存Excel文件失败: {e}")
+                    
+                    return success_count > 0
+                    
+                except FileNotFoundError:
+                    logger.error(f"Excel文件不存在: {excel_file}")
                     return False
-            #弹窗提示任务完成
-            return True
+                except Exception as e:
+                    logger.error(f"处理Excel文件时出错: {e}")
+                    print(traceback.format_exc())
+                    return False
+            else:
+                # 如果不存在Excel表格，只执行一次行为组
+                logger.info(f"行为组 {group_id} 未关联Excel表格，执行一次行为组")
+                result = self.run_action(None)
+                return result
+                
         except Exception as e:
-            self._close_session()
-            print(f"Error running action group: {e}")
+            logger.error(f"运行行为组时出错: {e}")
             print(traceback.format_exc())
             return False
+        finally:
+            self._close_session()
 
     def run_action(self, excel_value):
-        """执行行为列表"""
+        """执行行为列表（按照树结构顺序）
+        
+        Args:
+            excel_value: Excel中的当前行数据值（如果有关联Excel表格）
+            
+        Returns:
+            bool: 是否成功执行
+        """
         session = self._get_session(True)
         if not session:
             return False
         try:
-            # 获取行为列表
-            actions = session.query(ActionList).filter_by(group_id=self.group_id).all()  
-            if not actions:
+            # 获取按树结构顺序排列的行为列表
+            ordered_actions = self._get_ordered_actions_by_tree_structure(session, self.group_id)
+            
+            if not ordered_actions:
+                logger.warning(f"行为组 {self.group_id} 没有可执行的行为元")
                 return False
-            action_loop_result = True
-            #开始执行actions中的action,如果action.next_action_id为空，则下一个action按照顺序执行；如果action.next_action_id不为空，则跳转到next_action_id的action执行。
-            # 创建一个索引来跟踪当前执行的action
-            current_index = 0
-            while current_index < len(actions):
-                action = actions[current_index]
+            
+            # 创建ID到记录的映射，用于快速查找
+            action_map = {action.id: action for action in ordered_actions}
+            
+            # 记录已执行的action ID，避免循环
+            executed_ids = set()
+            
+            # 从第一个action开始执行
+            current_action_id = None
+            if ordered_actions:
+                current_action_id = ordered_actions[0].id
+            
+            # 按照树结构顺序执行，但如果next_id存在，优先跳转到next_id
+            while current_action_id and current_action_id not in executed_ids:
+                executed_ids.add(current_action_id)
                 
-                # 根据action_type执行相应的操作
-                if action.action_type == 'mouse':
-                    action_loop_result = self.run_mouse_action(action.id)
-                    logger.info(f"{action.action_name}:鼠标动作执行结果: {action_loop_result}")
-                elif action.action_type == 'keyboard':
-                    action_loop_result = self.run_keyboard_action(action.id)
-                    logger.info(f"{action.action_name}:键盘动作执行结果: {action_loop_result}")
-                elif action.action_type == 'code':
-                    action_loop_result = self.run_code_action(action.id)
-                    logger.info(f"{action.action_name}:代码动作执行结果: {action_loop_result}")
-                elif action.action_type == 'class':
-                    action_loop_result = self.run_class_action(action.id)
-                    logger.info(f"{action.action_name}:类动作执行结果: {action_loop_result}")
-                elif action.action_type == 'AI':
-                    action_loop_result = self.run_AI_action(action.id)
-                    logger.info(f"{action.action_name}:AI动作执行结果: {action_loop_result}")
-                elif action.action_type == 'image':
-                    action_loop_result = self.run_image_action(action.id)
-                    logger.info(f"{action.action_name}:图像动作执行结果: {action_loop_result}")
-                elif action.action_type == 'function':
-                    action_loop_result = self.run_function_action(action.id)
-                    logger.info(f"{action.action_name}:函数动作执行结果: {action_loop_result}")
+                # 获取当前action
+                current_action = action_map.get(current_action_id)
+                if not current_action:
+                    # 如果找不到当前action，尝试从数据库中查找
+                    current_action = session.query(ActionList).filter_by(
+                        id=current_action_id, group_id=self.group_id
+                    ).first()
+                    if not current_action:
+                        logger.warning(f"找不到action: {current_action_id}")
+                        break
+                    # 添加到map中
+                    action_map[current_action_id] = current_action
+                
+                # 跳过hierarchy_list类型的记录（这些只是目录节点，不执行）
+                if current_action.action_type in ['hierarchy_list', 'list_hierarchy']:
+                    logger.info(f"跳过hierarchy_list类型的action: {current_action.id}")
+                    # 继续执行下一个action
+                    current_action_id = self._get_next_action_id_by_order(current_action_id, ordered_actions)
+                    continue
+                
+                # 执行当前action
+                action_result = self._execute_single_action(current_action)
+                
+                if not action_result:
+                    # 如果执行失败，记录日志并继续执行下一个
+                    logger.warning(f"Action {current_action.id} ({current_action.action_name}) 执行失败")
+                    # 继续执行下一个action
+                    current_action_id = self._get_next_action_id_by_order(current_action_id, ordered_actions)
+                    continue
+                
+                logger.info(f"Action {current_action.id} ({current_action.action_name}) 执行成功")
+                
+                # 确定下一个action
+                if current_action.next_id and current_action.next_id != 'None':
+                    # 如果有next_id，优先跳转到next_id对应的action
+                    next_action = session.query(ActionList).filter_by(
+                        id=current_action.next_id,
+                        group_id=self.group_id
+                    ).first()
+                    
+                    if next_action:
+                        # 如果next_id指向的action在ordered_actions中，添加到map中
+                        if next_action.id not in action_map:
+                            action_map[next_action.id] = next_action
+                        current_action_id = next_action.id
+                    else:
+                        # next_id指向的action不存在或不在当前group中，按顺序执行下一个
+                        current_action_id = self._get_next_action_id_by_order(current_action_id, ordered_actions)
                 else:
-                    return False
-                
-                # 检查执行结果
-                if not action_loop_result:
-                    return False
-                
-                # 处理下一个action
-                if action.next_id and action.next_id != 'None':
-                    # 如果有指定的下一个action_id，查找对应的action
-                    next_action = session.query(ActionList).filter_by(id=action.next_id).first()
-                    if not next_action:
-                        return False
-                    current_index = action.next_id
-                else:
-                    # 如果没有指定next_action_id，则按顺序执行下一个
-                    current_index += 1
+                    # 没有next_id，按树结构顺序执行下一个
+                    current_action_id = self._get_next_action_id_by_order(current_action_id, ordered_actions)
             
             return True
+            
         except Exception as e:
-            print(f"Error in run_action: {e}")
+            logger.error(f"执行行为列表时出错: {e}")
+            print(traceback.format_exc())
+            return False
+    
+    def _get_ordered_actions_by_tree_structure(self, session, group_id):
+        """根据树结构顺序获取ActionList
+        
+        排序规则：
+        1. 先根据list_rank级别排序
+        2. 然后根据sort_num排序
+        3. 排除action_type为"hierarchy_list"的记录（这些只是目录节点）
+        
+        Args:
+            session: 数据库会话
+            group_id: 行为组ID
+            
+        Returns:
+            list: 按树结构顺序排列的ActionList记录列表
+        """
+        try:
+            # 获取所有行为元
+            all_actions = session.query(ActionList).filter_by(group_id=group_id).all()
+            
+            # 过滤掉hierarchy_list类型的记录（这些只是目录节点，不执行）
+            executable_actions = []
+            for action in all_actions:
+                action_type = getattr(action, 'action_type', None)
+                if action_type and action_type not in ['hierarchy_list', 'list_hierarchy']:
+                    # 只处理有list_rank的记录
+                    if action.list_rank:
+                        executable_actions.append(action)
+            
+            # 按照树结构顺序排序
+            # 排序规则：先按list_rank排序，然后按sort_num排序
+            def get_sort_key(action):
+                """获取排序键"""
+                if not action.list_rank:
+                    # 如果没有list_rank，放到最后
+                    return f"Z999_{action.sort_num or 0:06d}_{action.id}"
+                
+                # 解析list_rank
+                from gui.tabs.Hierarchyutils import parse_group_rank
+                rank_dict = parse_group_rank(action.list_rank)
+                
+                # 创建排序键：A级_B级_C级_D级_E级_sort_num_id
+                sort_key = (
+                    f"{rank_dict['A']:03d}_{rank_dict['B']:03d}_{rank_dict['C']:03d}_"
+                    f"{rank_dict['D']:03d}_{rank_dict['E']:03d}_{action.sort_num or 0:06d}_{action.id}"
+                )
+                return sort_key
+            
+            # 排序
+            ordered_actions = sorted(executable_actions, key=lambda x: get_sort_key(x))
+            
+            return ordered_actions
+            
+        except Exception as e:
+            logger.error(f"获取排序后的行为列表失败: {e}")
+            print(traceback.format_exc())
+            return []
+    
+    def _get_next_action_id_by_order(self, current_action_id, ordered_actions):
+        """根据排序后的列表获取下一个action的ID
+        
+        Args:
+            current_action_id: 当前action的ID
+            ordered_actions: 排序后的action列表
+            
+        Returns:
+            int or None: 下一个action的ID，如果没有则返回None
+        """
+        try:
+            # 找到当前action在列表中的位置
+            for i, action in enumerate(ordered_actions):
+                if action.id == current_action_id:
+                    # 如果还有下一个action，返回其ID
+                    if i + 1 < len(ordered_actions):
+                        return ordered_actions[i + 1].id
+                    else:
+                        # 已经是最后一个action
+                        return None
+            return None
+        except Exception as e:
+            logger.error(f"获取下一个action ID失败: {e}")
+            return None
+    
+    def _execute_single_action(self, action):
+        """执行单个行为元
+        
+        Args:
+            action: ActionList记录
+            
+        Returns:
+            bool: 是否成功执行
+        """
+        try:
+            action_type = getattr(action, 'action_type', None)
+            
+            if action_type == 'mouse':
+                return self.run_mouse_action(action.id)
+            elif action_type == 'keyboard':
+                return self.run_keyboard_action(action.id)
+            elif action_type == 'code_text' or action_type == 'code':
+                return self.run_code_action(action.id)
+            elif action_type == 'class':
+                return self.run_class_action(action.id)
+            elif action_type == 'ai' or action_type == 'AI':
+                return self.run_AI_action(action.id)
+            elif action_type == 'printscreen' or action_type == 'image':
+                return self.run_image_action(action.id)
+            elif action_type == 'function':
+                return self.run_function_action(action.id)
+            else:
+                # 未知的行为类型
+                logger.warning(f"未知的行为类型: {action_type}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"执行行为元失败: {e}")
+            print(traceback.format_exc())
             return False
 
     def run_mouse_action(self, action_id):
@@ -614,6 +838,7 @@ class ActionGroupRun:
         if not session:
             return False
             
+        mouse_action = None
         try:
             # 获取鼠标行为列表
             mouse_action = session.query(ActionMouse).filter_by(action_list_id=action_id).first()
@@ -623,31 +848,40 @@ class ActionGroupRun:
             #如果mouse_action.time_diff为空，则不等待
             if mouse_action.time_diff:
                 time.sleep(mouse_action.time_diff)
+            
+            # 验证坐标是否在屏幕范围内（避免触发fail-safe）
+            screen_width, screen_height = pyautogui.size()
+            if mouse_action.x < 0 or mouse_action.x >= screen_width or \
+               mouse_action.y < 0 or mouse_action.y >= screen_height:
+                logger.warning(f"鼠标坐标超出屏幕范围: ({mouse_action.x}, {mouse_action.y}), 屏幕大小: ({screen_width}, {screen_height})，进行坐标矫正。")
+                mouse_action.x = screen_width -1
+                mouse_action.y = screen_height -1
+            
             # 鼠标动作(1:左击,2:右击,3:左键按下,4:右键按下,5:左键释放,6:右键释放,7:滚轮动作)
             # 开始执行mouse_action
             if mouse_action.mouse_action == 1:
                 # 开始执行click_action
-                pyautogui.click(mouse_action.x,mouse_action.y)
+                pyautogui.click(mouse_action.x, mouse_action.y)
                 return True
             elif mouse_action.mouse_action == 2:
                 # 开始执行右击
-                pyautogui.rightClick(mouse_action.x,mouse_action.y)
+                pyautogui.rightClick(mouse_action.x, mouse_action.y)
                 return True
             elif mouse_action.mouse_action == 3:
                 # 开始执行左键按下
-                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='left')
+                pyautogui.mouseDown(mouse_action.x, mouse_action.y, button='left')
                 return True
             elif mouse_action.mouse_action == 4:
                 # 开始执行右键按下
-                pyautogui.mouseDown(mouse_action.x,mouse_action.y,button='right')
+                pyautogui.mouseDown(mouse_action.x, mouse_action.y, button='right')
                 return True
             elif mouse_action.mouse_action == 5:
                 # 开始执行左键释放
-                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='left')
+                pyautogui.mouseUp(mouse_action.x, mouse_action.y, button='left')
                 return True
             elif mouse_action.mouse_action == 6:
                 # 开始执行右键释放
-                pyautogui.mouseUp(mouse_action.x,mouse_action.y,button='right')
+                pyautogui.mouseUp(mouse_action.x, mouse_action.y, button='right')
                 return True
             elif mouse_action.mouse_action == 7:
                 # 开始执行滚轮动作
@@ -655,8 +889,17 @@ class ActionGroupRun:
                 return True
             else:
                 return False
+        except FailSafeException as e:
+            # 处理PyAutoGUI的fail-safe异常
+            if mouse_action:
+                logger.warning(f"PyAutoGUI fail-safe触发: 鼠标移动到屏幕角落。坐标: ({mouse_action.x}, {mouse_action.y})")
+            else:
+                logger.warning("PyAutoGUI fail-safe触发: 鼠标移动到屏幕角落。")
+            logger.warning("提示: 如果这是预期行为，可以禁用fail-safe（不推荐）。")
+            logger.warning("建议: 检查鼠标坐标是否正确，避免移动到屏幕边缘。")
+            return False
         except Exception as e:
-            print(f"Error in run_mouse_action: {e}")
+            logger.error(f"Error in run_mouse_action: {e}")
             print(traceback.format_exc())
             return False
 

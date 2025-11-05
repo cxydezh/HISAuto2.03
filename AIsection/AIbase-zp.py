@@ -7,7 +7,7 @@ from zhipuai import ZhipuAI
 print("开始")
 client = ZhipuAI(api_key="783620bfceb1a3a8766a383954f23c32.BVqhPrWuaWF2F8jg") # 填写您自己的APIKey
 response = client.chat.completions.create(
-    model="glm-z1-flash",  # 填写需要调用的模型名称
+    model="glm-4.5",  # 填写需要调用的模型名称
     messages=[
       {
         "role": "user",
